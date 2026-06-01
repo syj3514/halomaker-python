@@ -55,13 +55,13 @@ def compute_adaptahop_131():
         sync_fortran()
         refmask = mem['refmask_10'] if H.zoomin else np.empty(1, dtype=np.bool_)
         if H.zoomin:
-            print(f'{print_prefix}Go into Fortran for zoom-in...')
+            if(H.megaverbose): print(f'{print_prefix}Go into Fortran for zoom-in...')
             neikdtree.compute_adaptahop(
                 np.asfortranarray(mem['pos_10'].T),
                 np.asfortranarray(mem['mass_10']),
                 np.asfortranarray(refmask), np.asfortranarray(H.zoombox))
         else:
-            print(f'{print_prefix}Go into Fortran for full-box...')
+            if(H.megaverbose): print(f'{print_prefix}Go into Fortran for full-box...')
             neikdtree.compute_adaptahop(
                 np.asfortranarray(mem['pos_10'].T),
                 np.asfortranarray(mem['mass_10']))
@@ -79,7 +79,7 @@ def compute_adaptahop_131():
         # Close real_table, integer_table, liste_parts, density
         del arr
         neikdtree.close()
-        print(f'{print_prefix}Fortran closed')
+        if(H.megaverbose): print(f'{print_prefix}Fortran closed')
         timerecords.append(('    f2py', -time.time()+ref)); ref = time.time()
     else:
         # action neighbors
@@ -163,7 +163,7 @@ def list_parameters_1300():
     print(f'{print_prefix}alphap          :',H.alphap)
     print(f'{print_prefix}fudge           :',H.fudge)
     print(f'{print_prefix}fudgepsilon     :',H.fudgepsilon)
-    print(f'{print_prefix}epsilon [Mpc]   :',H.fudgepsilon*H.xlong/H.npart**(1/3))
+    print(f'{print_prefix}epsilon [kpc]   :',1000*H.fudgepsilon*H.xlong/H.npart**(1/3))
     print(f'{print_prefix}Selection method:',' ',H.method)
     print(f'{print_prefix}============================================================', flush=True)
 
@@ -759,7 +759,7 @@ def init_group_members():
 def sync_fortran():
     assert H.FORTRAN
     neikdtree.sync_others(
-        H.verbose, H.npart, H.nbPes,
+        H.verbose, H.megaverbose, H.npart, H.nbPes,
         H.rho_threshold, H.massp, H.boxsize,
         H.nhop, H.nvoisins,
         H.fudge, H.alphap,

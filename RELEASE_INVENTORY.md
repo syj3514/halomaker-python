@@ -20,6 +20,8 @@ Final Fortran sources:
 
 - `compute_adaptahop.f90`
 - `compute_adaptahop_zoomin.f90`
+- `compute_adaptahop.pyf`
+- `compute_adaptahop_zoomin.pyf`
 
 The release Fortran filenames are canonical. They are staged from the final
 cleaned development versions so that existing Python imports continue to work.

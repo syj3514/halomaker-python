@@ -1,0 +1,70 @@
+python module compute_adaptahop
+    interface
+        module neikdtree
+            integer(kind=4), allocatable, dimension(:) :: liste_parts
+            real(kind=8), allocatable, dimension(:) :: density
+            integer(kind=4) :: nnodes
+            real(kind=8), allocatable, dimension(:,:) :: real_table
+            integer(kind=4), allocatable, dimension(:,:) :: integer_table
+
+            subroutine compute_adaptahop(pos_in,mass_in)
+                real(kind=8), dimension(:,:), intent(in) :: pos_in
+                real(kind=8), dimension(:), intent(in) :: mass_in
+            end subroutine compute_adaptahop
+
+            subroutine sync_from_change_pos(npart_in,nusedpart_in,epsilon_in,fudgepsilon_in,xlong_in,boxsize2_in)
+                integer(kind=8), intent(in) :: npart_in
+                integer(kind=4), intent(in) :: nusedpart_in
+                real(kind=8), intent(in) :: epsilon_in
+                real(kind=8), intent(in) :: fudgepsilon_in
+                real(kind=8), intent(in) :: xlong_in
+                real(kind=8), intent(in) :: boxsize2_in
+            end subroutine sync_from_change_pos
+
+            subroutine sync_from_init_adaptahop(npart_in,nmembthresh_in,nmembers_in,zoomin_in,omegal_in,omega_lambda_f_in,omega0_in,omega_f_in,aexp_max_in,af_in,hubble_in,h_f_in,boxsize2_in,lf_in,xlong_in,ylong_in,zlong_in,xlongs2_in,ylongs2_in,zlongs2_in,hub_pt_in,aexp_in,pos_shift_in)
+                integer(kind=8), intent(in) :: npart_in
+                integer(kind=4), intent(in) :: nmembthresh_in
+                integer(kind=4), intent(in) :: nmembers_in
+                integer(kind=4), intent(in) :: zoomin_in
+                real(kind=8), intent(in) :: omegal_in
+                real(kind=8), intent(in) :: omega_lambda_f_in
+                real(kind=8), intent(in) :: omega0_in
+                real(kind=8), intent(in) :: omega_f_in
+                real(kind=8), intent(in) :: aexp_max_in
+                real(kind=8), intent(in) :: af_in
+                real(kind=8), intent(in) :: hubble_in
+                real(kind=8), intent(in) :: h_f_in
+                real(kind=8), intent(in) :: boxsize2_in
+                real(kind=8), intent(in) :: lf_in
+                real(kind=8), intent(in) :: xlong_in
+                real(kind=8), intent(in) :: ylong_in
+                real(kind=8), intent(in) :: zlong_in
+                real(kind=8), intent(in) :: xlongs2_in
+                real(kind=8), intent(in) :: ylongs2_in
+                real(kind=8), intent(in) :: zlongs2_in
+                real(kind=8), intent(in) :: hub_pt_in
+                real(kind=8), intent(in) :: aexp_in
+                real(kind=8), dimension(3), intent(in) :: pos_shift_in
+            end subroutine sync_from_init_adaptahop
+
+            subroutine sync_others(verbose_in,megaverbose_in,npart_in,nbpes_in,rho_threshold_in,massp_in,boxsize_in,nhop_in,nvoisins_in,fudge_in,alphap_in,method_in,nlevelmax_in)
+                logical, intent(in) :: verbose_in
+                logical, intent(in) :: megaverbose_in
+                integer(kind=4), intent(in) :: npart_in
+                integer(kind=4), intent(in) :: nbpes_in
+                real(kind=8), intent(in) :: rho_threshold_in
+                real(kind=8), intent(in) :: massp_in
+                real(kind=8), intent(in) :: boxsize_in
+                integer(kind=4), intent(in) :: nhop_in
+                integer(kind=4), intent(in) :: nvoisins_in
+                real(kind=8), intent(in) :: fudge_in
+                real(kind=8), intent(in) :: alphap_in
+                character*(*), intent(in) :: method_in
+                integer(kind=4), intent(in) :: nlevelmax_in
+            end subroutine sync_others
+
+            subroutine close
+            end subroutine close
+        end module neikdtree
+    end interface
+end python module compute_adaptahop

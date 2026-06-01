@@ -301,7 +301,7 @@ subroutine sync_from_init_adaptahop( &
 end subroutine sync_from_init_adaptahop
 
 subroutine sync_others( &
-   verbose_in, npart_in, nbPes_in,&
+   verbose_in, megaverbose_in, npart_in, nbPes_in,&
    rho_threshold_in, massp_in, boxsize_in, &
    nhop_in, nvoisins_in, &
    fudge_in, alphap_in, &
@@ -309,7 +309,7 @@ subroutine sync_others( &
 
    implicit none
 
-   logical, intent(in) :: verbose_in
+   logical, intent(in) :: verbose_in, megaverbose_in
    integer(kind=4), intent(in) :: npart_in, nbPes_in
    integer(kind=4), intent(in) :: nhop_in, nvoisins_in
    real(kind=8), intent(in) :: rho_threshold_in, massp_in, boxsize_in
@@ -318,6 +318,7 @@ subroutine sync_others( &
    integer(kind=4), intent(in) :: nlevelmax_in
 
    verbose         = verbose_in
+   megaverbose     = megaverbose_in
    npart           = npart_in
    nbPes           = nbPes_in
    rho_threshold   = rho_threshold_in
@@ -345,12 +346,12 @@ subroutine compute_mean_density_and_np
    integer(kind=4) :: vt0, vt1, vtrate
    real(kind=8)    :: dvt
 
-   call system_clock(count=tttt0, count_rate=ttttrate)
+   if (megaverbose) call system_clock(count=tttt0, count_rate=ttttrate)
    if (verbose) write(errunit,*) '    Compute mean density for each particle...'
 
    allocate(density(npart))
    call omp_set_num_threads(nbPes)
-   if(verbose) write(errunit,*) "    [OMP] compute density with ncore=",nbPes
+   if (megaverbose) write(errunit,*) "    [OMP] compute density with ncore=",nbPes
 
    !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(ipar,dist2,iparnei)
    !$OMP DO
@@ -366,7 +367,7 @@ subroutine compute_mean_density_and_np
    !$OMP END PARALLEL
    ! Check for average density
    if (verbose) then
-      call system_clock(count=vt0, count_rate=vtrate)
+      if (megaverbose) call system_clock(count=vt0, count_rate=vtrate)
       write(errunit,*) '        Calc average density...'
       densav=0.d0
 
@@ -379,13 +380,13 @@ subroutine compute_mean_density_and_np
       enddo
 
       write(errunit,*) '    --> Average density :',densav
-      call system_clock(count=vt1, count_rate=vtrate)
-      dvt=real(vt1-vt0,8)/real(vtrate,8)
-      if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dvt," seconds to compute average density"
+      if (megaverbose) call system_clock(count=vt1, count_rate=vtrate)
+      if (megaverbose) dvt=real(vt1-vt0,8)/real(vtrate,8)
+      if (megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dvt," seconds to compute average density"
    endif
-   call system_clock(count=tttt1, count_rate=ttttrate)
-   dtdtdtdt=real(tttt1-tttt0,8)/real(ttttrate,8)
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdtdt," seconds to compute mean density"
+   if (megaverbose) call system_clock(count=tttt1, count_rate=ttttrate)
+   if (megaverbose) dtdtdtdt=real(tttt1-tttt0,8)/real(ttttrate,8)
+   if (megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdtdt," seconds to compute mean density"
 
 end subroutine compute_mean_density_and_np
 
@@ -403,7 +404,7 @@ subroutine find_local_maxima
    integer(kind=4) :: groupid
    integer(kind=4) :: tttt0, tttt1, ttttrate
    real(kind=8)    :: dtdtdtdt
-   call system_clock(count=tttt0, count_rate=ttttrate)
+   if(megaverbose) call system_clock(count=tttt0, count_rate=ttttrate)
    if (verbose) write(errunit,*) '    Now Find local maxima...'
 
    liste_parts(1:nusedpart)=0
@@ -412,7 +413,7 @@ subroutine find_local_maxima
    ngroups=0
    nequal_density=0
    call omp_set_num_threads(nbPes)
-   if(verbose) write(errunit,*) "    [OMP] find local maxima with ncore=",nbPes
+   if(megaverbose) write(errunit,*) "    [OMP] find local maxima with ncore=",nbPes
    !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(ipar,dist2,iparnei,densest,iparsel,idist,iparid) &
    !$OMP REDUCTION(+:nequal_density)
    !$OMP DO SCHEDULE(GUIDED,256)
@@ -485,18 +486,19 @@ subroutine find_local_maxima
    if (verbose) then
       allocate(nmemb(ngroups))
       nmemb(1:ngroups)=0
-      firstpart(1:ngroups)=0
-      do ipar=1,npart
-         if (density(ipar).le.rho_threshold) cycle
-         igroup=liste_parts(ipar)
-         if (igroup.gt.0) then
-            idpart_adapt(ipar)=firstpart(igroup)   
-            firstpart(igroup)=ipar
-            nmemb(igroup)=nmemb(igroup)+1
-         endif
-      enddo
+   endif
+   firstpart(1:ngroups)=0
+   do ipar=1,npart
+      if (density(ipar).le.rho_threshold) cycle
+      igroup=liste_parts(ipar)
+      if (igroup.gt.0) then
+         idpart_adapt(ipar)=firstpart(igroup)   
+         firstpart(igroup)=ipar
+         if (verbose) nmemb(igroup)=nmemb(igroup)+1
+      endif
+   enddo
 
-   
+   if (verbose) then
       nmembmax=0
       nmembtot=0
       do igroup=1,ngroups
@@ -507,9 +509,9 @@ subroutine find_local_maxima
       write(errunit,*) '    --> Total number of particles in groups ',nmembtot
       deallocate(nmemb)
    endif
-   call system_clock(count=tttt1, count_rate=ttttrate)
-   dtdtdtdt=real(tttt1-tttt0,8)/real(ttttrate,8)
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdtdt," seconds to find local maxima"
+   if(megaverbose) call system_clock(count=tttt1, count_rate=ttttrate)
+   if(megaverbose) dtdtdtdt=real(tttt1-tttt0,8)/real(ttttrate,8)
+   if(megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdtdt," seconds to find local maxima"
   
 end subroutine find_local_maxima
 
@@ -566,12 +568,12 @@ subroutine create_group_tree
       igroupid(igroup)=igroup
    enddo
    allocate(queue_color(ngroups))
-   if (verbose) write(errunit,*) '    [OMP] Create nodes ...'
-   call system_clock(count=ttt0, count_rate=tttrate)
+   if(megaverbose) write(errunit,*) '    [OMP] Create nodes ...'
+   if(megaverbose) call system_clock(count=ttt0, count_rate=tttrate)
    call create_nodes_omp_root(rhot,inode,igr1,igr2)
-   call system_clock(count=ttt1, count_rate=tttrate)
-   dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create nodes"
+   if(megaverbose) call system_clock(count=ttt1, count_rate=tttrate)
+   if(megaverbose) dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
+   if(megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create nodes"
    deallocate(queue_color)
    deallocate(idgroup)
    deallocate(color)
@@ -1384,7 +1386,7 @@ subroutine compute_saddle_list_csr
    max_neig = 0
 
    call omp_set_num_threads(nbPes)
-   if (verbose) write(errunit,*) '    [OMP] Count saddle neighbours with ncore=',nbPes
+   if (megaverbose) write(errunit,*) '    [OMP] Count saddle neighbours with ncore=',nbPes
    !$OMP PARALLEL DEFAULT(SHARED) &
    !$OMP PRIVATE(tid,igroup1,ineig,ipar1,dist2,iparnei,idist,ipar2,igroup2,in1) &
    !$OMP REDUCTION(MAX:max_neig)
@@ -1454,7 +1456,7 @@ subroutine compute_saddle_list_csr
 ! Second pass: fill neighbour list and saddle densities
 !=======================================================================
 
-   if (verbose) write(errunit,*) '    [OMP] Fill saddle neighbours with ncore=',nbPes
+   if (megaverbose) write(errunit,*) '    [OMP] Fill saddle neighbours with ncore=',nbPes
    !$OMP PARALLEL DEFAULT(SHARED) &
    !$OMP PRIVATE(tid,igroup1,neig,ineig,ipar1,base,dist2,iparnei,density1, &
    !$OMP         idist,ipar2,igroup2,density2,rho_sad12,ineig2,in1)
@@ -1889,18 +1891,18 @@ subroutine create_tree_structure
    sizeroot=real(max(xlong,ylong,zlong),8)
 
    allocate(icidpart_tmp(npart))
-   call system_clock(count=ttt0, count_rate=tttrate)
+   if(megaverbose) call system_clock(count=ttt0, count_rate=tttrate)
    
    call create_KDtree(nlevel,pos_this_node, &
    &                   npart_this_node,npart_pos_this_node,inccell, &
    &                   idmother,sizeroot*0.5d0)
    ncell=inccell
 
-   call system_clock(count=ttt1, count_rate=tttrate)
-   dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
+   if(megaverbose) call system_clock(count=ttt1, count_rate=tttrate)
+   if(megaverbose) dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
    
    if (verbose) write(errunit,*) '    --> total number of cells =',ncell
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create the tree structure"
+   if(megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create the tree structure"
    deallocate(idpart_tmp)
    deallocate(icidpart_tmp)
 

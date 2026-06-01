@@ -24,6 +24,7 @@ Create a project environment with your preferred Python version:
 
 ```bash
 uv venv --python 3.12
+source .venv/bin/activate
 uv sync
 ```
 
@@ -93,6 +94,7 @@ The main HDF5 catalog output is written as `tree_bricks*.h5`.
 - `compute_neiKDtree_mod.py`: Python-to-Fortran bridge
 - `compute_adaptahop.f90`: optimized full-box AdaptaHOP extension
 - `compute_adaptahop_zoomin.f90`: optimized zoom-in AdaptaHOP extension
+- `compute_adaptahop*.pyf`: explicit f2py interfaces for portable builds
 - `hdf_output_example.py`: simple HDF5 catalog reader example
 
 ## Release Checklist

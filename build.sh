@@ -12,8 +12,7 @@ for source in compute_adaptahop.f90 compute_adaptahop_zoomin.f90; do
         --f90exec="$F90" \
         --f77exec="$F90" \
         --f90flags="-fopenmp -O3 -x f95-cpp-input" \
-        -c "$source" \
-        -m "$module"
+        -c "${module}.pyf" "$source"
 done
 
 rm -f ./*.o ./*.mod

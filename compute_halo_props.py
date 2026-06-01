@@ -70,12 +70,18 @@ def init_cosmo_01():
     # in the input file and trim them whenever it is needed
 
     # Initial (beginning of the simulation) expansion factor
-    H.ai             = np.float64(1)#/(1+50))
+    # H.ai             = np.float64(1)#/(1+50))
+    cosmo_given={}
+    H.ai             = np.float64(1/(1+50))
     # The file is based on a keyword list. Keywords are optional, so we set defaults here.  
     H.omega_f        = np.float64(0.3333)      #   mass density at final timestep
+    cosmo_given['omega_f'] = False
     H.omega_lambda_f = np.float64(0.6667)      #   lambda at final timestep 
-    H.af             = np.float64(36.587)      #   expansion factor of the final timestep  
+    cosmo_given['omega_lambda_f'] = False
+    # H.af             = np.float64(36.587)      #   expansion factor of the final timestep  
+    H.af             = np.float64(1)      #   expansion factor of the final timestep  
     H.Lf             = np.float64(150.0)       #   final length of box in physical Mpc 
+    cosmo_given['Lf'] = False
     H.H_f            = np.float64(66.667)      #   Hubble constant in km/s/Mpc, at final timestep
     H.b_init         = np.float64(0.2)         #   linking length friend-of-friend parameter @ z=0
     H.nMembers       = 20          #   minimum number of particles for a halo
@@ -175,7 +181,7 @@ def init_cosmo_01():
 
     for line in f20:
         i = line.find('=')
-        if i == -1 or line.strip().startswith('#'):
+        if i == -1 or line.strip().startswith('#') or line.strip().startswith('!'):
             continue
 
         name  = line[:i].strip()
@@ -196,6 +202,11 @@ def init_cosmo_01():
             attr = H.ALIAS_TO_ATTR[name]
             dtype = H.PARAMS[attr][1]
             setattr(H, attr, dtype(value))
+            try: cosmo_given[attr] = True
+            except KeyError: pass
+
+        elif name[0] in ["#", "!"]:
+            pass
 
         else:
             print(f'dont recognise parameter: {name}')
@@ -252,15 +263,19 @@ def init_cosmo_01():
     # rho_crit = 2.78782 h^2  (critical density in units of 10**11 M_sol/Mpc^3)
     H.mboxp     = np.float64(2.78782)*(H.Lf**3)*(H.H_f/100.)**2*H.omega_f 
 
-    print()
-    print( f'> Initial/Final values of parameters:  ')
-    print( f'> -----------------------------------  ')
-    print("")
-    print( f' > redshift                         :   ',H.af/H.ai-1.)
-    print( f' > box size (Mpc)                   :   ',H.Lboxp)
-    print( f' > Hubble parameter  (km/s/Mpc)     :   ',H.H_i)
-    print( f' > box mass (10^11 Msol)            :   ',H.mboxp)
-    print()
+    if cosmo_given['omega_f'] and cosmo_given['omega_lambda_f'] and cosmo_given['Lf']:
+        print()
+        print( f'> Initial/Final values of parameters:  ')
+        print( f'> -----------------------------------  ')
+        print( f' At (initial) redshift              :   ',H.af/H.ai-1.)
+        print( f' > box size (Mpc)                   :   ',H.Lboxp)
+        print( f' > Hubble parameter  (km/s/Mpc)     :   ',H.H_i)
+        # print( f' > box mass (10^11 Msol)            :   ',H.mboxp)
+        print( f' At (final) redshift                :   ',H.af/H.af-1.)
+        print( f' > box size (Mpc)                   :   ',H.Lf)
+        print( f' > Hubble parameter  (km/s/Mpc)     :   ',H.H_f)
+        print( f' box mass (10^11 Msol)              :   ',H.mboxp)
+        print()
 
     H.write_resim_masses = True
     H.mprefix[1] = f"u{os.getuid()}"
@@ -461,7 +476,7 @@ def new_step_1():
 
     DEBUG=False
     if H.nbPes==1 or DEBUG:
-        if H.verbose:
+        if H.megaverbose:
             iterator = tqdm(iterator, 
                 total = H.nb_of_halos + H.nb_of_subhalos,
                 desc = "[Ncpu=1] Calc halo props", ncols=100)
@@ -481,7 +496,7 @@ def new_step_1():
             _compute_halo_props(i1, member=member, fagor=fagor, printdatacheckhalo=printdatacheckhalo)
     else:
         callback=None
-        if H.verbose:
+        if H.megaverbose:
             pbar = tqdm(total = H.nb_of_halos + H.nb_of_subhalos, desc = f"[Ncpu={H.nbPes}] Calc halo props", ncols=100)
             callback = lambda *args: pbar.update()
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
@@ -534,14 +549,15 @@ def new_step_1():
 
     read_time_end = time.time()
 
-    print('> time_step computations took : ',round(read_time_end - read_time_ini),' seconds', flush=True)
-    ttotal = sum([t for _, t in timereport if t>=0])
-    for name, t in timereport:
-        if t >= 0:
-            print(f"    {name:25s} : {t:.2f} sec ({t/ttotal*100:.2f}%)")
-        else:
-            print(f"    {name:25s} : {-t:.2f} sec")
-    print()
+    if(H.megaverbose): 
+        print('> time_step computations took : ',round(read_time_end - read_time_ini),' seconds', flush=True)
+        ttotal = sum([t for _, t in timereport if t>=0])
+        for name, t in timereport:
+            if t >= 0:
+                print(f"    {name:25s} : {t:.2f} sec ({t/ttotal*100:.2f}%)")
+            else:
+                print(f"    {name:25s} : {-t:.2f} sec")
+        print()
     H.mlist()
     return True
 
@@ -627,7 +643,7 @@ def make_halos_13():
 
     print('> Number of halos with more than     ', H.nMembers,' particles:',H.nb_of_halos)
     print('> Number of sub-halos with more than ', H.nMembers,' particles:',H.nb_of_subhalos)
-    print('> time_step computations took : ',round(read_time_end - read_time_ini),' seconds', flush=True)
+    if(H.megaverbose): print('> time_step computations took : ',round(read_time_end - read_time_ini),' seconds', flush=True)
   
     return timerecords
 

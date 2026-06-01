@@ -15,11 +15,7 @@ module fhalo_defs
    real(kind=8), allocatable    :: pos_cell(:,:)
    integer(kind=4), allocatable :: sister(:)
    integer(kind=4), allocatable :: firstchild(:)
-   integer(kind=4), allocatable :: idpart(:),idpart_tmp(:)
-   integer(kind=4), allocatable :: iparneigh(:,:)
-   integer(kind=4), allocatable :: iparneigh_col(:)
-   integer(kind=4), allocatable :: active_parts(:)
-   integer(kind=4)              :: nactive_parts=0
+   integer(kind=4), allocatable :: idpart(:),idpart_tmp(:),idpart_adapt(:)
    integer(kind=4), allocatable :: firstpart(:)
    integer(kind=4), allocatable :: igrouppart(:)
    integer(kind=4), allocatable :: idgroup(:),idgroup_tmp(:)
@@ -209,6 +205,7 @@ subroutine compute_adaptahop(pos_in, mass_in)
    call create_tree_structure
    call compute_mean_density_and_np
    call find_local_maxima
+   call compute_saddle_list_csr
    call create_group_tree
    deallocate(pos)
    deallocate(mass)
@@ -295,7 +292,7 @@ subroutine sync_from_init_adaptahop( &
 end subroutine sync_from_init_adaptahop
 
 subroutine sync_others( &
-   verbose_in, npart_in, nbPes_in,&
+   verbose_in, megaverbose_in, npart_in, nbPes_in,&
    rho_threshold_in, massp_in, boxsize_in, &
    nhop_in, nvoisins_in, &
    fudge_in, alphap_in, &
@@ -303,7 +300,7 @@ subroutine sync_others( &
 
    implicit none
 
-   logical, intent(in) :: verbose_in
+   logical, intent(in) :: verbose_in, megaverbose_in
    integer(kind=4), intent(in) :: npart_in, nbPes_in
    integer(kind=4), intent(in) :: nhop_in, nvoisins_in
    real(kind=8), intent(in) :: rho_threshold_in, massp_in, boxsize_in
@@ -312,6 +309,7 @@ subroutine sync_others( &
    integer(kind=4), intent(in) :: nlevelmax_in
 
    verbose         = verbose_in
+   megaverbose     = megaverbose_in
    npart           = npart_in
    nbPes           = nbPes_in
    rho_threshold   = rho_threshold_in
@@ -330,7 +328,7 @@ subroutine compute_mean_density_and_np
 !=======================================================================
    implicit none
 
-   integer(kind=4)                     :: ipar,iactive,nactive
+   integer(kind=4)                     :: ipar
    real(kind=8), dimension(0:nvoisins) :: dist2
    integer, dimension(nvoisins)        :: iparnei
    real(kind=8)                        :: densav
@@ -339,14 +337,14 @@ subroutine compute_mean_density_and_np
    integer(kind=4) :: vt0, vt1, vtrate
    real(kind=8)    :: dvt
 
-   call system_clock(count=tttt0, count_rate=ttttrate)
+   if (megaverbose) call system_clock(count=tttt0, count_rate=ttttrate)
    if (verbose) write(errunit,*) '    Compute mean density for each particle...'
 
    allocate(density(npart))
 
 
    call omp_set_num_threads(nbPes)
-   if(verbose) write(errunit,*) "    [OMP] compute density with ncore=",nbPes
+   if (megaverbose) write(errunit,*) "    [OMP] compute density with ncore=",nbPes
 
    !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(ipar,dist2,iparnei)
    !$OMP DO
@@ -359,7 +357,7 @@ subroutine compute_mean_density_and_np
 
    ! Check for average density
    if (verbose) then
-      call system_clock(count=vt0, count_rate=vtrate)
+      if (megaverbose) call system_clock(count=vt0, count_rate=vtrate)
       write(errunit,*) '        Calc average density...'
       densav=0.d0
 
@@ -368,43 +366,13 @@ subroutine compute_mean_density_and_np
       enddo
 
       write(errunit,*) '    --> Average density :',densav
-      call system_clock(count=vt1, count_rate=vtrate)
-      dvt=real(vt1-vt0,8)/real(vtrate,8)
-      if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dvt," seconds to compute average density"
+      if (megaverbose) call system_clock(count=vt1, count_rate=vtrate)
+      if (megaverbose) dvt=real(vt1-vt0,8)/real(vtrate,8)
+      if (megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dvt," seconds to compute average density"
    endif
-
-   allocate(iparneigh_col(npart))
-   iparneigh_col(1:npart)=0
-   nactive=0
-   do ipar=1,npart
-      if (density(ipar).gt.rho_threshold) then
-         nactive=nactive+1
-         iparneigh_col(ipar)=nactive
-      endif
-   enddo
-
-   nactive_parts=nactive
-   allocate(iparneigh(nhop,max(nactive_parts,1)))
-
-   !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(ipar,iactive,dist2,iparnei)
-   !$OMP DO
-   do ipar=1,npart
-      iactive=iparneigh_col(ipar)
-      if (iactive.gt.0) then
-         call omp_find_nearest_parts(ipar,dist2,iparnei)
-         iparneigh(1:nhop,iactive)=iparnei(1:nhop)
-      endif
-   enddo
-   !$OMP END DO
-   !$OMP END PARALLEL
-   deallocate(mass_cell)
-   deallocate(size_cell)
-   deallocate(pos_cell)
-   deallocate(sister)
-   deallocate(firstchild)
-   call system_clock(count=tttt1, count_rate=ttttrate)
-   dtdtdtdt=real(tttt1-tttt0,8)/real(ttttrate,8)
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdtdt," seconds to compute mean density"
+   if (megaverbose) call system_clock(count=tttt1, count_rate=ttttrate)
+   if (megaverbose) dtdtdtdt=real(tttt1-tttt0,8)/real(ttttrate,8)
+   if (megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdtdt," seconds to compute mean density"
 
 end subroutine compute_mean_density_and_np
 
@@ -415,33 +383,34 @@ subroutine find_local_maxima
    implicit none
 
    integer(kind=4)             :: ipar,idist,iparid,iparsel,igroup,nmembmax,nmembtot,nequal_density
-   integer(kind=4)             :: iactive
    integer(kind=4),allocatable :: nmemb(:)
+   real(kind=8), dimension(0:nvoisins) :: dist2
+   integer, dimension(nvoisins)        :: iparnei
    real(kind=8)                :: densest
    integer(kind=4) :: groupid
    integer(kind=4) :: tttt0, tttt1, ttttrate
    real(kind=8)    :: dtdtdtdt
-
-   call system_clock(count=tttt0, count_rate=ttttrate)
+   if(megaverbose) call system_clock(count=tttt0, count_rate=ttttrate)
    if (verbose) write(errunit,*) '    Now Find local maxima...'
 
    allocate(igrouppart(npart))
    igrouppart(1:npart)=0
-   allocate(active_parts(max(nactive_parts,1)))
-   do ipar=1,npart
-      iactive=iparneigh_col(ipar)
-      if (iactive.gt.0) active_parts(iactive)=ipar
-   enddo
-
-   idpart=0
+   allocate(idpart_adapt(npart))
+   idpart_adapt=0
    ngroups=0
    nequal_density=0
-   do iactive=1,nactive_parts
-      ipar=active_parts(iactive)
+   call omp_set_num_threads(nbPes)
+   if(megaverbose) write(errunit,*) "    [OMP] find local maxima with ncore=",nbPes
+   !$OMP PARALLEL DEFAULT(SHARED) PRIVATE(ipar,dist2,iparnei,densest,iparsel,idist,iparid) &
+   !$OMP REDUCTION(+:nequal_density)
+   !$OMP DO SCHEDULE(GUIDED,256)
+   do ipar=1,npart
+      if (density(ipar).le.rho_threshold) cycle
+      call omp_find_nearest_parts(ipar,dist2,iparnei)
       densest=density(ipar)
       iparsel=ipar
       do idist=1,nhop
-         iparid=iparneigh(idist,iparneigh_col(ipar))
+         iparid=iparnei(idist)
          if (density(iparid).gt.densest) then
             iparsel=iparid
             densest=density(iparid)
@@ -450,11 +419,16 @@ subroutine find_local_maxima
             nequal_density=nequal_density+1
          endif
       enddo
-      if (iparsel.eq.ipar) then
+      idpart_adapt(ipar)=iparsel
+   enddo
+   !$OMP END DO
+   !$OMP END PARALLEL
+
+   do ipar=1,npart
+      if (density(ipar).le.rho_threshold) cycle
+      if (idpart_adapt(ipar).eq.ipar) then
          ngroups=ngroups+1
-         idpart(ipar)=-ngroups
-      else
-         idpart(ipar)=iparsel
+         idpart_adapt(ipar)=-ngroups
       endif
    enddo
    if (verbose .and. nequal_density.gt.0) then
@@ -469,9 +443,9 @@ subroutine find_local_maxima
    allocate(densityg(ngroups))
    allocate(firstpart(ngroups))
    
-   do iactive=1,nactive_parts
-      ipar=active_parts(iactive)
-      iparid=idpart(ipar)
+   do ipar=1,npart
+      if (density(ipar).le.rho_threshold) cycle
+      iparid=idpart_adapt(ipar)
 
       if (iparid.lt.0) then
          groupid=-iparid
@@ -486,7 +460,7 @@ subroutine find_local_maxima
                exit
             endif
 
-            iparid=idpart(iparid)
+            iparid=idpart_adapt(iparid)
          enddo
 
          if (iparid.lt.0) then
@@ -497,21 +471,22 @@ subroutine find_local_maxima
       endif
    enddo
 
+   firstpart(1:ngroups)=0
    if (verbose) then
       allocate(nmemb(ngroups))
       nmemb(1:ngroups)=0
-      firstpart(1:ngroups)=0
-      do iactive=1,nactive_parts
-         ipar=active_parts(iactive)
-         igroup=igrouppart(ipar)
-         if (igroup.gt.0) then
-            idpart(ipar)=firstpart(igroup)   
-            firstpart(igroup)=ipar
-            nmemb(igroup)=nmemb(igroup)+1
-         endif
-      enddo
+   endif
+   do ipar=1,npart
+      if (density(ipar).le.rho_threshold) cycle
+      igroup=igrouppart(ipar)
+      if (igroup.gt.0) then
+         idpart_adapt(ipar)=firstpart(igroup)
+         firstpart(igroup)=ipar
+         if (verbose) nmemb(igroup)=nmemb(igroup)+1
+      endif
+   enddo
 
-   
+   if (verbose) then
       nmembmax=0
       nmembtot=0
       do igroup=1,ngroups
@@ -522,12 +497,9 @@ subroutine find_local_maxima
       write(errunit,*) '    --> Total number of particles in groups ',nmembtot
       deallocate(nmemb)
    endif
-   deallocate(active_parts)
-   nactive_parts=0
-   
-   call system_clock(count=tttt1, count_rate=ttttrate)
-   dtdtdtdt=real(tttt1-tttt0,8)/real(ttttrate,8)
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdtdt," seconds to find local maxima"
+   if(megaverbose) call system_clock(count=tttt1, count_rate=ttttrate)
+   if(megaverbose) dtdtdtdt=real(tttt1-tttt0,8)/real(ttttrate,8)
+   if(megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdtdt," seconds to find local maxima"
   
 end subroutine find_local_maxima
 
@@ -544,13 +516,6 @@ subroutine create_group_tree
    real(kind=8)    :: rhot,truemass
 
    if (verbose) write(errunit,*) '    Create the tree of structures of structures'
-
-   ! End of the branches of the tree
-   call system_clock(count=ttt0, count_rate=tttrate)
-   call compute_saddle_list_csr
-   call system_clock(count=ttt1, count_rate=tttrate)
-   dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to saddle_list"
 
    if (verbose) write(errunit,*) '    Build the hierarchical tree'
 
@@ -594,18 +559,18 @@ subroutine create_group_tree
       igroupid(igroup)=igroup
    enddo
    allocate(queue_color(ngroups))
-   if (verbose) write(errunit,*) '    [OMP] Create nodes ...'
-   call system_clock(count=ttt0, count_rate=tttrate)
+   if(megaverbose) write(errunit,*) '    [OMP] Create nodes ...'
+   if(megaverbose) call system_clock(count=ttt0, count_rate=tttrate)
    call create_nodes_omp_root(rhot,inode,igr1,igr2)
-   call system_clock(count=ttt1, count_rate=tttrate)
-   dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create nodes"
+   if(megaverbose) call system_clock(count=ttt1, count_rate=tttrate)
+   if(megaverbose) dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
+   if(megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create nodes"
    deallocate(queue_color)
    deallocate(idgroup)
    deallocate(color)
    deallocate(igroupid)
    deallocate(idgroup_tmp)
-   deallocate(idpart)
+   deallocate(idpart_adapt)
    deallocate(densityg)
    deallocate(firstpart)
 
@@ -903,7 +868,7 @@ recursive subroutine create_nodes_omp_task(rhot0,inode0,igr1_0,igr2_0,do_paint)
          ipar=firstpart(igroup)
          do while (ipar.gt.0)
             liste_parts(ipar)=inode
-            ipar=idpart(ipar)
+            ipar=idpart_adapt(ipar)
          enddo
       enddo
    endif
@@ -1264,7 +1229,7 @@ subroutine treat_particles(igroup,rhot,posg,imass,igroupref,posref, &
             densmin=density_ipar
             densmax=densmin
          else
-            idpart(iparold)=ipar
+            idpart_adapt(iparold)=ipar
          endif
          iparold=ipar
          imass=imass+1
@@ -1299,10 +1264,10 @@ subroutine treat_particles(igroup,rhot,posg,imass,igroupref,posref, &
          densmax=max(densmax,density_ipar)
          densmin=min(densmin,density_ipar)
       endif
-      ipar=idpart(ipar)
+      ipar=idpart_adapt(ipar)
    enddo
    if (first_good) then
-      idpart(iparold)=0
+      idpart_adapt(iparold)=0
    else
       firstpart(igroup)=0
    endif
@@ -1334,11 +1299,11 @@ subroutine treat_particles_linkonly(igroup,rhot)
             first_good=.true.
             firstpart(igroup)=ipar
          else
-            idpart(iparold)=ipar
+            idpart_adapt(iparold)=ipar
          endif
          iparold=ipar
       endif
-      ipar=idpart(ipar)
+      ipar=idpart_adapt(ipar)
    enddo
    if (.not.first_good) firstpart(igroup)=0
 
@@ -1365,12 +1330,16 @@ subroutine compute_saddle_list_csr
    integer(kind=4) :: max_neig
    integer(kind=4) :: total_conn, new_total_conn
    integer(kind=4) :: base, base2, outbase
+   integer(kind=4) :: tid
+   real(kind=8), dimension(0:nvoisins) :: dist2
+   integer, dimension(nvoisins)        :: iparnei
    real(kind=8)    :: density1, density2, rho_sad12
    logical         :: exist
 
-   logical, allocatable         :: touch(:)
-   integer(kind=4), allocatable :: listg(:)
+   logical, allocatable         :: touch_thr(:,:)
+   integer(kind=4), allocatable :: listg_thr(:,:)
    real(kind=8), allocatable    :: rho_sad(:)
+   real(kind=8), allocatable    :: rho_sad_thr(:,:)
    integer(kind=4), allocatable :: isad(:)
    integer(kind=4), allocatable :: indx(:)
 
@@ -1385,10 +1354,10 @@ subroutine compute_saddle_list_csr
 &                                ' of each elementary group...'
    allocate(group_nhnei(ngroups))
    allocate(group_offset(ngroups+1))
-   allocate(touch(ngroups))
-   allocate(listg(ngroups))
+   allocate(touch_thr(ngroups,nbPes))
+   allocate(listg_thr(ngroups,nbPes))
 
-   touch(1:ngroups)=.false.
+   touch_thr(1:ngroups,1:nbPes)=.false.
    group_nhnei(1:ngroups)=0
 
 !=======================================================================
@@ -1397,35 +1366,45 @@ subroutine compute_saddle_list_csr
 
    max_neig = 0
 
+   call omp_set_num_threads(nbPes)
+   if (megaverbose) write(errunit,*) '    [OMP] Count saddle neighbours with ncore=',nbPes
+   !$OMP PARALLEL DEFAULT(SHARED) &
+   !$OMP PRIVATE(tid,igroup1,ineig,ipar1,dist2,iparnei,idist,ipar2,igroup2,in1) &
+   !$OMP REDUCTION(MAX:max_neig)
+   tid=omp_get_thread_num()+1
+   !$OMP DO SCHEDULE(DYNAMIC,8)
    do igroup1=1,ngroups
       ineig=0
       ipar1=firstpart(igroup1)
 
       do while (ipar1.gt.0)
+         call omp_find_nearest_parts(ipar1,dist2,iparnei)
          do idist=1,nhop
-            ipar2=iparneigh(idist,iparneigh_col(ipar1))
+            ipar2=iparnei(idist)
             igroup2=igrouppart(ipar2)
 
             if (igroup2.gt.0 .and. igroup2.ne.igroup1) then
-               if (.not.touch(igroup2)) then
+               if (.not.touch_thr(igroup2,tid)) then
                   ineig=ineig+1
-                  touch(igroup2)=.true.
-                  listg(ineig)=igroup2
+                  touch_thr(igroup2,tid)=.true.
+                  listg_thr(ineig,tid)=igroup2
                endif
             endif
          enddo
-         ipar1=idpart(ipar1)
+         ipar1=idpart_adapt(ipar1)
       enddo
 
 !     Reinitialize touch
       do in1=1,ineig
-         igroup2=listg(in1)
-         touch(igroup2)=.false.
+         igroup2=listg_thr(in1,tid)
+         touch_thr(igroup2,tid)=.false.
       enddo
 
       group_nhnei(igroup1)=ineig
       max_neig=max(max_neig,ineig)
    enddo
+   !$OMP END DO
+   !$OMP END PARALLEL
 
 !=======================================================================
 ! Build CSR offset
@@ -1444,10 +1423,12 @@ subroutine compute_saddle_list_csr
       allocate(rho_sad(max_neig))
       allocate(isad(max_neig))
       allocate(indx(max_neig))
+      allocate(rho_sad_thr(max_neig,nbPes))
    else
       allocate(rho_sad(1))
       allocate(isad(1))
       allocate(indx(1))
+      allocate(rho_sad_thr(1,nbPes))
    endif
 
    if (verbose) write(errunit,*) '    Compute lists of neighbourgs and saddle points...'
@@ -1456,6 +1437,12 @@ subroutine compute_saddle_list_csr
 ! Second pass: fill neighbour list and saddle densities
 !=======================================================================
 
+   if (megaverbose) write(errunit,*) '    [OMP] Fill saddle neighbours with ncore=',nbPes
+   !$OMP PARALLEL DEFAULT(SHARED) &
+   !$OMP PRIVATE(tid,igroup1,neig,ineig,ipar1,base,dist2,iparnei,density1, &
+   !$OMP         idist,ipar2,igroup2,density2,rho_sad12,ineig2,in1)
+   tid=omp_get_thread_num()+1
+   !$OMP DO SCHEDULE(DYNAMIC,8)
    do igroup1=1,ngroups
       neig=group_nhnei(igroup1)
 
@@ -1465,31 +1452,32 @@ subroutine compute_saddle_list_csr
          base=group_offset(igroup1)
 
          do while (ipar1.gt.0)
+            call omp_find_nearest_parts(ipar1,dist2,iparnei)
             density1=density(ipar1)
 
             do idist=1,nhop
-               ipar2=iparneigh(idist,iparneigh_col(ipar1))
+               ipar2=iparnei(idist)
                igroup2=igrouppart(ipar2)
 
                if (igroup2.gt.0 .and. igroup2.ne.igroup1) then
                   density2=density(ipar2)
                   rho_sad12=min(density1,density2)
 
-                  if (.not.touch(igroup2)) then
+                  if (.not.touch_thr(igroup2,tid)) then
                      ineig=ineig+1
-                     touch(igroup2)=.true.
-                     listg(igroup2)=ineig
+                     touch_thr(igroup2,tid)=.true.
+                     listg_thr(igroup2,tid)=ineig
 
-                     rho_sad(ineig)=rho_sad12
+                     rho_sad_thr(ineig,tid)=rho_sad12
                      isad_all(base+ineig-1)=igroup2
                   else
-                     ineig2=listg(igroup2)
-                     rho_sad(ineig2)=max(rho_sad(ineig2),rho_sad12)
+                     ineig2=listg_thr(igroup2,tid)
+                     rho_sad_thr(ineig2,tid)=max(rho_sad_thr(ineig2,tid),rho_sad12)
                   endif
                endif
             enddo
 
-            ipar1=idpart(ipar1)
+            ipar1=idpart_adapt(ipar1)
          enddo
 
          if (ineig.ne.neig) then
@@ -1499,17 +1487,20 @@ subroutine compute_saddle_list_csr
             STOP
          endif
 
-         rho_saddle_all(base:base+ineig-1)=rho_sad(1:ineig)
+         rho_saddle_all(base:base+ineig-1)=rho_sad_thr(1:ineig,tid)
 
 !        Reinitialize touch
          do in1=1,ineig
             igroup2=isad_all(base+in1-1)
-            touch(igroup2)=.false.
+            touch_thr(igroup2,tid)=.false.
          enddo
       endif
    enddo
-   deallocate(touch)
-   deallocate(listg)
+   !$OMP END DO
+   !$OMP END PARALLEL
+   deallocate(touch_thr)
+   deallocate(listg_thr)
+   deallocate(rho_sad_thr)
 
 !=======================================================================
 ! Establish symmetry in connections
@@ -1657,8 +1648,12 @@ subroutine compute_saddle_list_csr
    deallocate(rho_sad)
    deallocate(isad)
    deallocate(indx)
-   deallocate(iparneigh)
-   deallocate(iparneigh_col)
+   deallocate(mass_cell)
+   deallocate(size_cell)
+   deallocate(pos_cell)
+   deallocate(sister)
+   deallocate(firstchild)
+   deallocate(idpart)
    deallocate(igrouppart)
 
 end subroutine compute_saddle_list_csr
@@ -1846,18 +1841,18 @@ subroutine create_tree_structure
    sizeroot=real(max(xlong,ylong,zlong),8)
 
    allocate(icidpart_tmp(npart))
-   call system_clock(count=ttt0, count_rate=tttrate)
+   if(megaverbose) call system_clock(count=ttt0, count_rate=tttrate)
 
    call create_KDtree(nlevel,pos_this_node, &
    &                   npart_this_node,npart_pos_this_node,inccell, &
    &                   idmother,sizeroot*0.5d0)
    ncell=inccell
 
-   call system_clock(count=ttt1, count_rate=tttrate)
-   dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
+   if(megaverbose) call system_clock(count=ttt1, count_rate=tttrate)
+   if(megaverbose) dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
    
    if (verbose) write(errunit,*) '    --> total number of cells =',ncell
-   if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create the tree structure"
+   if(megaverbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create the tree structure"
    deallocate(idpart_tmp)
    deallocate(icidpart_tmp)
 

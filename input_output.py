@@ -39,7 +39,12 @@ def read_data_10():
        f12 = open('inputfiles_HaloMaker.dat','r')
 
     # then read name of snapshot, its type (pm, p3m, SN, Nzo, Gd), num of procs used and number of snapshot
-    name_of_file, H.simtype, H.nbPes, H.numstep = f12.readline().split()
+    iscomment = True
+    while iscomment:
+        name_of_file, H.simtype, H.nbPes, H.numstep = f12.readline().split()
+        # skip comment lines starting with # or !
+        if name_of_file[0] not in ['#', '!']:
+            iscomment = False
     H.nbPes = int(H.nbPes); H.numstep = int(H.numstep)
     if(name_of_file[0]=="'")or(name_of_file[0]=='"'):
         name_of_file = name_of_file[1:-1]
@@ -165,6 +170,10 @@ def read_ramses_100(repository):
     print(f">     t={tco:.3e}, aexp={aexp_ram:.3e}, hexp={hexp:.3e}")
     print(f">     omega_m={omega_m:.3f}, omega_l={omega_l:.3f}, omega_k={omega_k:.3f}, omega_b={omega_b:.3f}")
     print(f">     boxlen={H.Lboxp:.3e} h-1 Mpc")
+    print(boxlen*scale_l/3.08e24)
+    print(boxlen*scale_l/3.08e24/aexp_ram)
+    print(boxlen*scale_l/3.08e24*aexp_ram)
+    stop()
 
     # now read the particle data files
     nomfich = f"{repository}/part_{nchar}.out00001"
@@ -192,7 +201,7 @@ def read_ramses_100(repository):
     H.massalloc = True
   
     iterobj = range(1,H.ncpu+1)
-    if(H.TQDM):
+    if(H.TQDM)and(H.megaverbose):
         iterobj = tqdm(range(1,H.ncpu+1), desc="Reading particles", unit="cpu", ncols=100)
     for icpu1 in iterobj:
         nomfich = f"{repository}/part_{nchar}.out{icpu1:05d}"
@@ -387,10 +396,12 @@ def read_ramses_new_101(repository, rver='Ra3'):
 
     H.Lboxp          = boxlen*scale_l/np.float64(3.08e24)/aexp_ram # converts cgs to Mpc comoving
     H.aexp           = aexp_ram*H.af  
-    H.omega_f        = omega_m
-    H.omega_lambda_f = omega_l
-    H.omega_c_f      = omega_k
+    H.omega_f        = omega_m # Override
+    H.omega_lambda_f = omega_l # Override
+    H.omega_c_f      = omega_k # Override
     if(H.verbose): print(f"\t|>     boxlen={boxlen*scale_l/np.float64(3.08e24):.3e} h-1 Mpc")
+    H.Lf = boxlen*scale_l/3.08e24/aexp_ram # Override
+    H.mboxp     = np.float64(2.78782)*(H.Lf**3)*(H.H_f/100.)**2*H.omega_f # Override
 
     # now read the particle data files
     nomfich = f"{repository}/part_{nchar}.out00001"
@@ -429,12 +440,12 @@ def read_ramses_new_101(repository, rver='Ra3'):
     kwargs = {'repository':repository, 'rver':rver, 'nchar':nchar, 'ndim':H.ndim, 'scale_l':scale_l, 'scale_t':scale_t, 'dmcount':True}
     iterobj = range(1,H.ncpu+1)
     if(H.nbPes==1): # Sequential reading
-        if(H.TQDM): pbar = tqdm(total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", file=sys.stdout, disable=(not H.verbose), ncols=100)
+        if(H.TQDM)and(H.megaverbose): pbar = tqdm(total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", file=sys.stdout, disable=(not H.megaverbose), ncols=100)
         ndm = 0
         for icpu1 in iterobj:
             ndm += _read_ramses_new_1010(icpu1, kwargs)
-            if(H.TQDM): pbar.update(1)
-        if(H.TQDM): pbar.close()
+            if(H.TQDM)and(H.megaverbose): pbar.update(1)
+        if(H.TQDM)and(H.megaverbose): pbar.close()
     else: # Multiprocessing
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
         with Pool(processes=H.nbPes) as pool:
@@ -443,7 +454,7 @@ def read_ramses_new_101(repository, rver='Ra3'):
                 r = pool.apply_async(_read_ramses_new_1010, (icpu1, kwargs))
                 async_results.append((icpu1, r))
             ndm = 0
-            for icpu1, r in tqdm(async_results, total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", disable=(not H.verbose), ncols=100):
+            for icpu1, r in tqdm(async_results, total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", disable=(not H.megaverbose), ncols=100):
                 try:
                     ndm += r.get(timeout=300)  # 300 sec
                 except TimeoutError:
@@ -458,12 +469,12 @@ def read_ramses_new_101(repository, rver='Ra3'):
     kwargs['dmcount'] = False
     iterobj = range(1,H.ncpu+1)
     if(H.nbPes==1): # Sequential reading
-        if(H.TQDM): pbar = tqdm(total=H.ncpu, desc=f"\t|  Reading parts(nbPes={H.nbPes})", unit="cpu", file=sys.stdout, ncols=100)
+        if(H.TQDM)and(H.megaverbose): pbar = tqdm(total=H.ncpu, desc=f"\t|  Reading parts(nbPes={H.nbPes})", unit="cpu", file=sys.stdout, ncols=100)
         npart = 0
         for icpu1 in iterobj:
             npart += _read_ramses_new_1010(icpu1, kwargs)
-            if(H.TQDM): pbar.update(1)
-        if(H.TQDM): pbar.close()
+            if(H.TQDM)and(H.megaverbose): pbar.update(1)
+        if(H.TQDM)and(H.megaverbose): pbar.close()
     else: # Multiprocessing
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
         with Pool(processes=H.nbPes) as pool:
@@ -472,7 +483,7 @@ def read_ramses_new_101(repository, rver='Ra3'):
                 r = pool.apply_async(_read_ramses_new_1010, (icpu1, kwargs))
                 async_results.append((icpu1, r))
             npart = 0
-            for icpu1, r in tqdm(async_results, total=H.ncpu, desc=f"\t|  Reading parts(nbPes={H.nbPes})", unit="cpu", disable=(not H.verbose), ncols=100):
+            for icpu1, r in tqdm(async_results, total=H.ncpu, desc=f"\t|  Reading parts(nbPes={H.nbPes})", unit="cpu", disable=(not H.megaverbose), ncols=100):
                 try:
                     npart += r.get(timeout=300)  # 300 sec
                 except TimeoutError:
