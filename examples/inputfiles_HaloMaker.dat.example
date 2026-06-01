@@ -1,0 +1,3 @@
+# Format:
+# '<RAMSES snapshot directory>'  <format>  <worker count>  <output number>
+'/path/to/ramses/output_00001/'  Ra3  8  00001

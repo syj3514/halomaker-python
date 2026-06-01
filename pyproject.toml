@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "halomaker-python"
+version = "0.1.0"
+description = "Python and Fortran implementation of HaloMaker / AdaptaHOP"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "h5py>=3.10",
+    "numba>=0.61",
+    "numpy>=1.26",
+    "scipy>=1.14",
+    "tqdm>=4.66",
+]
+
+[tool.setuptools]
+py-modules = [
+    "HaloMaker",
+    "compute_halo_props",
+    "compute_neiKDtree_mod",
+    "halo_defs",
+    "hdf_output_example",
+    "input_output",
+    "num_rec",
+]

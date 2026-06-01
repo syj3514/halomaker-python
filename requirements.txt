@@ -1,0 +1,5 @@
+h5py>=3.10
+numba>=0.61
+numpy>=1.26
+scipy>=1.14
+tqdm>=4.66

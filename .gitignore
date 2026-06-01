@@ -1,0 +1,15 @@
+*.log
+*.mod
+*.o
+*.so
+__pycache__/
+*.egg-info/
+.venv/
+uv.lock
+.python-version
+ncontam_halos*.dat
+resim_masses*.dat
+struct_tree.dat
+tree_bricks*
+input_HaloMaker.dat
+inputfiles_HaloMaker.dat
