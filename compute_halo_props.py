@@ -436,7 +436,7 @@ def new_step_1():
             else:
                 n_halo_contam += 1
     print('> # of halos, # of CONTAMINATED halos :',H.nb_of_halos,n_halo_contam,H.nb_of_subhalos,n_subs_contam)
-    if(H.verbose):
+    if(H.megaverbose):
         f222 = open(f'ncontam_halos{H.prefix}.dat', 'a+')
         f222.write(f'{H.numero_step:6d} {H.nb_of_halos:6d} {n_halo_contam:6d} {H.nb_of_subhalos:6d} {n_subs_contam:6d}\n')
         f222.close()
