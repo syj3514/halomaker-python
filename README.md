@@ -95,6 +95,19 @@ Edit `inputfiles_HaloMaker.dat` so that each active line points to an existing
 RAMSES snapshot. Set `zoomin = .true.` in `input_HaloMaker.dat` for zoom-in
 processing and `zoomin = .false.` for periodic full-box processing.
 
+For RAMSES snapshots, `lbox` is optional. The code reads the authoritative box
+size from the RAMSES AMR header during `read_data()`. If `lbox` is present in
+`input_HaloMaker.dat`, it is used only as an early fallback before the snapshot
+header is read.
+
+Recommended print levels:
+
+- `verbose = .false.`, `megaverbose = .false.`: compact production log.
+- `verbose = .true.`, `megaverbose = .false.`: normal diagnostic log with
+  major counts and timings.
+- `megaverbose = .true.`: development log with detailed Fortran and memory
+  tracking output.
+
 ## Run
 
 ```bash
@@ -102,6 +115,19 @@ bash run.sh
 ```
 
 The main HDF5 catalog output is written as `tree_bricks*.h5`.
+
+If a run is interrupted with Ctrl-C, killed by a scheduler, or leaves Python
+`forkserver` / `resource_tracker` processes behind, inspect and clean runtime
+leftovers with:
+
+```bash
+bash clean_runtime.sh
+bash clean_runtime.sh --force
+```
+
+The first command is a dry run. The `--force` command terminates matching
+HaloMaker runtime processes in this repository and removes matching shared
+memory files owned by the current user.
 
 ## Files
 
@@ -115,6 +141,7 @@ The main HDF5 catalog output is written as `tree_bricks*.h5`.
 - `compute_adaptahop_zoomin.f90`: optimized zoom-in AdaptaHOP extension
 - `compute_adaptahop*.pyf`: explicit f2py interfaces for portable builds
 - `hdf_output_example.py`: simple HDF5 catalog reader example
+- `clean_runtime.sh`: dry-run / cleanup helper for interrupted runs
 
 ## Release Checklist
 

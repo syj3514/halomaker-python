@@ -241,6 +241,8 @@ def init_cosmo_01():
     if getattr(H, 'zoomin', False):
         H.FlagPeriod = np.int32(0)
         print('[postprocess] H.zoomin=True -> H.FlagPeriod=0')
+    if not cosmo_given['Lf']:
+        print('[postprocess] lbox/Lf not provided; RAMSES header box size will be used after read_data')
     # ==========================================================
     # ==========================================================
     # ==========================================================

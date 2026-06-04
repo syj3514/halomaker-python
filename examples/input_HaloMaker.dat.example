@@ -1,5 +1,7 @@
 af             =  1.000
-lbox           =  100.000
+# lbox is optional for RAMSES snapshots. If omitted, the code reads the box
+# size from the RAMSES AMR header and uses that value for the run.
+# lbox         =  100.000
 H_f            =  70.000
 omega_f        =  0.300
 lambda_f       =  0.700
