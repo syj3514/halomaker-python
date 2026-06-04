@@ -74,6 +74,14 @@ This creates:
 - `compute_adaptahop*.so`
 - `compute_adaptahop_zoomin*.so`
 
+Build and run from the same activated Python environment. If you do not want
+to activate the environment, pass the interpreter explicitly:
+
+```bash
+PYTHON=.venv/bin/python bash build.sh
+PYTHON=.venv/bin/python bash run.sh
+```
+
 ## Configure
 
 Copy the example inputs into the repository root:

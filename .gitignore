@@ -1,4 +1,5 @@
 *.log
+*.swp
 *.mod
 *.o
 *.so

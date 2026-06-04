@@ -540,7 +540,7 @@ subroutine sync_from_init_adaptahop( &
 end subroutine sync_from_init_adaptahop
 
 subroutine sync_others( &
-   verbose_in, npart_in, nbPes_in,&
+   verbose_in, megaverbose_in, npart_in, nbPes_in,&
    rho_threshold_in, massp_in, boxsize_in, &
    nhop_in, nvoisins_in, &
    fudge_in, alphap_in, &
@@ -548,7 +548,7 @@ subroutine sync_others( &
 
    implicit none
 
-   logical, intent(in) :: verbose_in
+   logical, intent(in) :: verbose_in, megaverbose_in
    integer(kind=4), intent(in) :: npart_in, nbPes_in
    integer(kind=4), intent(in) :: nhop_in, nvoisins_in
    real(kind=8), intent(in) :: rho_threshold_in, massp_in, boxsize_in
@@ -557,6 +557,7 @@ subroutine sync_others( &
    integer(kind=4), intent(in) :: nlevelmax_in
 
    verbose         = verbose_in
+   megaverbose     = megaverbose_in
    npart           = npart_in
    nbPes           = nbPes_in
    rho_threshold   = rho_threshold_in
