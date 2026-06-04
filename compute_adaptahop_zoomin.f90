@@ -770,22 +770,23 @@ subroutine find_local_maxima
       endif
    enddo
 
+   firstpart(1:ngroups)=0
    if (verbose) then
       allocate(nmemb(ngroups))
       memory_used = memory_used + real(size(nmemb, kind=8), kind=8)*4.d0/1.d9
       nmemb(1:ngroups)=0
-      firstpart(1:ngroups)=0
-      do ipar=1,npart
-         if (density(ipar).le.rho_threshold) cycle
-         igroup=liste_parts(ipar)
-         if (igroup.gt.0) then
-            idpart_adapt(ipar)=firstpart(igroup)   
-            firstpart(igroup)=ipar
-            nmemb(igroup)=nmemb(igroup)+1
-         endif
-      enddo
+   endif
+   do ipar=1,npart
+      if (density(ipar).le.rho_threshold) cycle
+      igroup=liste_parts(ipar)
+      if (igroup.gt.0) then
+         idpart_adapt(ipar)=firstpart(igroup)   
+         firstpart(igroup)=ipar
+         if (verbose) nmemb(igroup)=nmemb(igroup)+1
+      endif
+   enddo
 
-   
+   if (verbose) then
       nmembmax=0
       nmembtot=0
       do igroup=1,ngroups
