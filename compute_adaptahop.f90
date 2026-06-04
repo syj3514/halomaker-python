@@ -291,7 +291,7 @@ end subroutine indexx
 subroutine print_memory()
 !=======================================================================
    implicit none
-   if (verbose) write(errunit,*) '--- Memory used (in GB) :',memory_used
+   if (megaverbose) write(errunit,*) '--- Memory used (in GB) :',memory_used
    if (memory_used .gt. 200.d0) then
       write(errunit,*) 'WARNING: Memory usage is very high. Consider increasing the size of integer variables to avoid overflow.'
       write(errunit,*) 'WARNING: Memory usage is very high. Consider increasing the size of integer variables to avoid overflow.'
@@ -397,7 +397,7 @@ subroutine compute_adaptahop(pos_in, mass_in)
    real(kind=8), intent(in)         :: mass_in(:)
 
    memory_used = 0d0
-   write(errunit,*) "[Memory] Initial"
+   if (megaverbose) write(errunit,*) "[Memory] Initial"
    call print_memory()
 
    allocate(liste_parts(1:nusedpart))
@@ -413,27 +413,27 @@ subroutine compute_adaptahop(pos_in, mass_in)
    allocate(mass(npart))
    memory_used = memory_used + real(size(mass), kind=8)*8/1.d9
    mass(:) = mass_in(:)
-   write(errunit,*) "[Memory] Start create_tree_structure"
+   if (megaverbose) write(errunit,*) "[Memory] Start create_tree_structure"
    call print_memory()
 
    call create_tree_structure
-   write(errunit,*) "[Memory] Start compute_mean_density_and_np"
+   if (megaverbose) write(errunit,*) "[Memory] Start compute_mean_density_and_np"
    call print_memory()
    call compute_mean_density_and_np
-   write(errunit,*) "[Memory] Start find_local_maxima"
+   if (megaverbose) write(errunit,*) "[Memory] Start find_local_maxima"
    call print_memory()
    call find_local_maxima
-   write(errunit,*) "[Memory] Start create_group_tree"
+   if (megaverbose) write(errunit,*) "[Memory] Start create_group_tree"
    call print_memory()
    call create_group_tree
-   write(errunit,*) "[Memory] Done create_group_tree"
+   if (megaverbose) write(errunit,*) "[Memory] Done create_group_tree"
    call print_memory()
 
    memory_used = memory_used - real(size(pos), kind=8)*8/1.d9
    deallocate(pos)
    memory_used = memory_used - real(size(mass), kind=8)*8/1.d9
    deallocate(mass)
-   write(errunit,*) "[Memory] Done compute_adaptahop"
+   if (megaverbose) write(errunit,*) "[Memory] Done compute_adaptahop"
    call print_memory()
    
    return
