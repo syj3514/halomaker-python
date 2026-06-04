@@ -4,6 +4,17 @@ Python + Fortran implementation of HaloMaker / AdaptaHOP for RAMSES
 snapshots. The Fortran extensions provide the memory-sensitive neighbor and
 structure-tree routines. Both full-box and zoom-in workflows are included.
 
+This release is staged from the dev3 memory-optimized implementation. The
+public filenames remain canonical (`compute_adaptahop.f90` and
+`compute_adaptahop_zoomin.f90`) so existing scripts do not need development
+branch names.
+
+Compared with the local reference implementation used during development,
+dev3 reduced the peak RSS of the 39990 full-box test from about 104 GiB to
+about 24 GiB while preserving catalog-level results. Runtime stayed close to
+the reference path on the tested workloads. The experimental dev4 zoom-in
+read-compact path is not included in this release staging copy.
+
 ## Requirements
 
 - Linux

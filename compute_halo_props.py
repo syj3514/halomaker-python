@@ -519,7 +519,7 @@ def new_step_1():
             for r in async_results:
                 r.get()
         signal.signal(signal.SIGTERM, H.flush)
-        if H.verbose: pbar.close()
+        if H.megaverbose: pbar.close()
 
 
 
@@ -930,7 +930,7 @@ def det_center_18(h:np.void, member:tuple):
     dv2 = imass * ((ivel[:,0] - h['vx'])**2 + (ivel[:,1] - h['vy'])**2 + (ivel[:,2] - h['vz'])**2)
     sigma2 = np.sum(dv2)
     h['sigma'] = np.sqrt(sigma2 / hm)
-    h['sigma_dm'] = np.sqrt(np.sum(dv2[dmmask]) / h['mdm'])
+    h['sigma_dm'] = np.sqrt(np.sum(dv2[dmmask]) / h['mdm']) if(h['mdm']>0) else 0
     h['sigma*'] = np.sqrt(np.sum(dv2[~dmmask]) / h['m*']) if(h['m*']>0) else 0
 
 #***********************************************************************

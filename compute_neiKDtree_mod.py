@@ -134,7 +134,7 @@ def compute_adaptahop_131():
         H.allocate('whereIam_counts', len(counts), dtype=np.int32)
         mem['whereIam_idxs'] = idxs
         mem['whereIam_counts'] = counts
-        if(H.verbose): print(f"{print_prefix}--> {time.time()-_ref:.2f} seconds to select halos")
+        if(H.megaverbose): print(f"{print_prefix}--> {time.time()-_ref:.2f} seconds to select halos")
         timerecords.append(('    select_halos', -time.time()+_ref))
     else:
         H.node_0 = np.empty(0, dtype=H.node_dtype)

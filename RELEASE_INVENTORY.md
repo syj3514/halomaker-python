@@ -4,6 +4,10 @@ This directory is a clean public-release staging area. It intentionally does
 not include local simulation data, generated catalogs, binary extensions, or
 development experiments.
 
+This staging copy uses the dev3 memory-optimized AdaptaHOP implementation as
+the canonical release source. Development branch names are intentionally not
+part of the public filenames.
+
 ## 1. Existing Files Included
 
 Runtime Python code:
@@ -23,8 +27,9 @@ Final Fortran sources:
 - `compute_adaptahop.pyf`
 - `compute_adaptahop_zoomin.pyf`
 
-The release Fortran filenames are canonical. They are staged from the final
-cleaned development versions so that existing Python imports continue to work.
+The release Fortran filenames are canonical. They are staged from
+`compute_adaptahop_dev3.f90` and `compute_adaptahop_zoomin_dev3.f90` so that
+existing Python imports continue to work without branch-specific names.
 
 ## 2. Existing Files Excluded
 
@@ -34,6 +39,7 @@ Development-only material:
 - `ADAPTAHOP_ZOOMIN_DEV_NOTES.md`
 - `codex_eval/` logs, comparators, diagnostics, and intermediate runners
 - intermediate `compute_adaptahop_*dev*.f90`, test, balanced, and debug files
+- experimental dev4 zoom-in read-compact patch files
 - `trashcan/`
 - exploratory scripts such as `test.py`, `main.py`, `fortrun.sh`,
   `param_test.sh`, and `nc_test.sh`
@@ -52,12 +58,9 @@ Machine-specific or generated material:
 
 Repository metadata not copied:
 
-- the existing `README.md`, because it is empty
 - the existing `f2py.sh`, because it compiles development files
 - the existing `pyrun.sh`, because it is tied to the local `uv` workflow
 - the existing `uv.lock`, because it captures development dependencies
-- the existing `pyproject.toml`, because it includes notebook tooling that is
-  not required at runtime
 
 ## 3. New Files Added
 
@@ -77,9 +80,8 @@ Repository metadata not copied:
 - Confirm authorship and citation text for the README.
 - Add a small redistributable RAMSES fixture and smoke test if licensing and
   storage constraints allow it.
-- Run the staged release against a known full-box dataset. The optimized
-  full-box module currently has compile and import coverage, but no staged
-  end-to-end reference catalog.
+- Run the staged release against a small redistributable full-box dataset once
+  such a fixture can be included.
 
 `uv.lock` and `.python-version` are intentionally not distributed. Users may
 generate them locally if they want to pin their selected interpreter and exact
