@@ -241,17 +241,20 @@ def init_cosmo_01():
     if getattr(H, 'zoomin', False):
         H.FlagPeriod = np.int32(0)
         print('[postprocess] H.zoomin=True -> H.FlagPeriod=0')
-    if not cosmo_given['Lf']:
-        print('[postprocess] lbox/Lf not provided; RAMSES header box size will be used after read_data')
+    header_keys = ('omega_f', 'omega_lambda_f', 'Lf')
+    missing_header_values = [key for key in header_keys if not cosmo_given[key]]
+    if missing_header_values:
+        joined = ', '.join(missing_header_values)
+        print(f'[postprocess] {joined} not provided; RAMSES header values will be used after read_data')
+    cosmo_inputs_ready = cosmo_given['omega_f'] and cosmo_given['omega_lambda_f']
+    box_input_ready = cosmo_given['Lf']
     # ==========================================================
     # ==========================================================
     # ==========================================================
 
-    # initial size of the box in physical Mpc (NB: f index stands for final quantities)
-    H.Lboxp = H.Lf*(H.ai/H.af)
-
-    if( ((H.omega_f+H.omega_lambda_f) != 1.0)and(H.omega_lambda_f != 0.0) ):
-        raise NotImplementedError('> lambda + non flat Universe not implemented yet')
+    if cosmo_inputs_ready:
+        if( ((H.omega_f+H.omega_lambda_f) != 1.0)and(H.omega_lambda_f != 0.0) ):
+            raise NotImplementedError('> lambda + non flat Universe not implemented yet')
 
     # In the most general of cases:
     #     af/aexp         = 1+z
@@ -260,12 +263,14 @@ def init_cosmo_01():
     #     omega_c(z)      = omega_c_f * (1+z)**2 * (H_f/H(z))**2
     #     H(z)**2         = H_f**2*( omega_f*(1+z)**3 + omega_c_f*(1+z)**2 + omega_lambda_f)
 
-    H.omega_c_f = 1. - H.omega_f - H.omega_lambda_f
-    H.H_i       = H.H_f * np.sqrt( H.omega_f*(H.af/H.ai)**3 + H.omega_c_f*(H.af/H.ai)**2 + H.omega_lambda_f)
-    # rho_crit = 2.78782 h^2  (critical density in units of 10**11 M_sol/Mpc^3)
-    H.mboxp     = np.float64(2.78782)*(H.Lf**3)*(H.H_f/100.)**2*H.omega_f 
+        H.omega_c_f = 1. - H.omega_f - H.omega_lambda_f
+        H.H_i       = H.H_f * np.sqrt( H.omega_f*(H.af/H.ai)**3 + H.omega_c_f*(H.af/H.ai)**2 + H.omega_lambda_f)
 
-    if cosmo_given['omega_f'] and cosmo_given['omega_lambda_f'] and cosmo_given['Lf']:
+    if cosmo_inputs_ready and box_input_ready:
+        # initial size of the box in physical Mpc (NB: f index stands for final quantities)
+        H.Lboxp = H.Lf*(H.ai/H.af)
+        # rho_crit = 2.78782 h^2  (critical density in units of 10**11 M_sol/Mpc^3)
+        H.mboxp = np.float64(2.78782)*(H.Lf**3)*(H.H_f/100.)**2*H.omega_f
         print()
         print( f'> Initial/Final values of parameters:  ')
         print( f'> -----------------------------------  ')
@@ -277,6 +282,23 @@ def init_cosmo_01():
         print( f' > box size (Mpc)                   :   ',H.Lf)
         print( f' > Hubble parameter  (km/s/Mpc)     :   ',H.H_f)
         print( f' box mass (10^11 Msol)              :   ',H.mboxp)
+        print()
+    elif cosmo_inputs_ready:
+        print()
+        print( f'> Initial/Final values of parameters:  ')
+        print( f'> -----------------------------------  ')
+        print( f' At (initial) redshift              :   ',H.af/H.ai-1.)
+        print( f' > Hubble parameter  (km/s/Mpc)     :   ',H.H_i)
+        print( f' At (final) redshift                :   ',H.af/H.af-1.)
+        print( f' > Hubble parameter  (km/s/Mpc)     :   ',H.H_f)
+        print( ' > box size and box mass are finalized after read_data')
+        print()
+    else:
+        print()
+        print( f'> Initial/Final values of parameters:  ')
+        print( f'> -----------------------------------  ')
+        print( ' > RAMSES header will set           :   ', joined)
+        print( ' > box size, box mass, and snapshot cosmology are finalized after read_data')
         print()
 
     H.write_resim_masses = True

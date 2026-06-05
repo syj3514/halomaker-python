@@ -95,10 +95,11 @@ Edit `inputfiles_HaloMaker.dat` so that each active line points to an existing
 RAMSES snapshot. Set `zoomin = .true.` in `input_HaloMaker.dat` for zoom-in
 processing and `zoomin = .false.` for periodic full-box processing.
 
-For RAMSES snapshots, `lbox` is optional. The code reads the authoritative box
-size from the RAMSES AMR header during `read_data()`. If `lbox` is present in
-`input_HaloMaker.dat`, it is used only as an early fallback before the snapshot
-header is read.
+For RAMSES snapshots, `lbox`, `omega_f`, and `lambda_f` are optional. The code
+reads the authoritative box size and snapshot cosmology from the RAMSES AMR
+header during `read_data()`. If those values are omitted, box-size-dependent
+and cosmology-dependent quantities are finalized only after the snapshot header
+is read.
 
 Recommended print levels:
 

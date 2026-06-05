@@ -164,6 +164,8 @@ def read_ramses_100(repository):
     H.omega_f        = omega_m+omega_b
     H.omega_lambda_f = omega_l
     H.omega_c_f      = omega_k
+    H.Lf             = boxlen*scale_l/3.08e24/aexp_ram
+    H.mboxp          = np.float64(2.78782)*(H.Lf**3)*(H.H_f/100.)**2*H.omega_f
     print(f"> From AMR file: `{nomfich}`")
     print(f">     ncpu={str(H.ncpu):>6}, ndim={H.ndim:1d}, nstep_coarse={nstep_coarse:6d}")
     print(f">     nlevelmax={H.nlevelmax}, ngridmax={ngridmax}")
@@ -831,4 +833,3 @@ def write_halo_1d0(h:np.void,unitfile:FortranFile):
     unitfile.write_record( h['rvir'],h['mvir'],h['tvir'],h['cvel'] )
     unitfile.write_record( h['rho_0'],h['r_c'],h['cNFW'] )
     unitfile.write_record( h['mcontam'] )
-
