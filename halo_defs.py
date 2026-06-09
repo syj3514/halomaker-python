@@ -241,17 +241,23 @@ halo_dtype = np.dtype([
         ('level', 'i4'),
         ('nextsub', 'i4'),
         ('px', 'f8'),('py', 'f8'),('pz', 'f8'),
+        ('px*', 'f8'),('py*', 'f8'),('pz*', 'f8'),
         ('vx', 'f8'),('vy', 'f8'),('vz', 'f8'),
         ('Lx', 'f8'),('Ly', 'f8'),('Lz', 'f8'),
         ('Lx*', 'f8'),('Ly*', 'f8'),('Lz*', 'f8'),
         ('sha', 'f8'),('shb', 'f8'),('shc', 'f8'),
         ('m', 'f8'),('mdm', 'f8'),('m*', 'f8'),
-        ('r', 'f8'),('r50', 'f8'),('r90', 'f8'),
+        ('r', 'f8'),('r*', 'f8'),('r50', 'f8'),('r90', 'f8'),
+        ('age', 'f8'),('metal', 'f8'),
+        ('SFR', 'f8'),('SFR_r50', 'f8'),('SFR_r90', 'f8'),
+        ('SFR10', 'f8'),('SFR10_r50', 'f8'),('SFR10_r90', 'f8'),
         ('spin', 'f8'),
         ('sigma', 'f8'),('sigma_dm', 'f8'),('sigma*', 'f8'),
         ('ek', 'f8'),('ep', 'f8'),('et', 'f8'),
         ('rvir','f8'),('mvir','f8'),('tvir','f8'),('cvel','f8'),
-        ('rho_0','f8'),('r_c','f8'),('cNFW','f8'),
+        ('rho_0','f8'),('r_c','f8'),('cNFW','f8'),('cNFWerr','f8'),
+        ('vmaxcir','f8'),('rmaxcir','f8'),
+        ('inslope','f8'),('inslopeerr','f8'),
         ('mcontam','f8')
 ])
 
@@ -264,23 +270,69 @@ def clear_halo(h):
     h['hostsub'] = 0
     h['level'] = 1
     h['nextsub'] = -1
-    h['px'] = np.float64(0.0); h['py'] = np.float64(0.0); h['pz'] = np.float64(0.0)  
+    h['px'] = np.float64(0.0); h['py'] = np.float64(0.0); h['pz'] = np.float64(0.0)
+    h['px*'] = np.float64(np.nan); h['py*'] = np.float64(np.nan); h['pz*'] = np.float64(np.nan)
     h['vx'] = np.float64(0.0); h['vy'] = np.float64(0.0); h['vz'] = np.float64(0.0)
     h['Lx'] = np.float64(0.0); h['Ly'] = np.float64(0.0); h['Lz'] = np.float64(0.0)
     h['Lx*'] = np.float64(0.0); h['Ly*'] = np.float64(0.0); h['Lz*'] = np.float64(0.0)
     h['sha'] = np.float64(0.0);h['shb'] = np.float64(0.0);h['shc'] = np.float64(0.0)
     h['m'] = np.float64(0.0); h['mdm'] = np.float64(0.0); h['m*'] = np.float64(0.0)
-    h['r'] = np.float64(0.0); h['r50'] = np.float64(0.0); h['r90'] = np.float64(0.0)
+    h['r'] = np.float64(0.0); h['r*'] = np.float64(np.nan); h['r50'] = np.float64(np.nan); h['r90'] = np.float64(np.nan)
+    h['age'] = np.float64(np.nan); h['metal'] = np.float64(np.nan)
+    h['SFR'] = np.float64(0.0); h['SFR_r50'] = np.float64(0.0); h['SFR_r90'] = np.float64(0.0)
+    h['SFR10'] = np.float64(0.0); h['SFR10_r50'] = np.float64(0.0); h['SFR10_r90'] = np.float64(0.0)
     h['spin'] = np.float64(0.0)
     h['sigma'] = np.float64(0.0); h['sigma_dm'] = np.float64(0.0); h['sigma*'] = np.float64(0.0)
     h['ek'] = np.float64(0.0); h['ep'] = np.float64(0.0); h['et'] = np.float64(0.0)
     h['rvir'] = np.float64(0.0); h['mvir'] = np.float64(0.0); h['tvir'] = np.float64(0.0); h['cvel'] = np.float64(0.0)
-    h['rho_0'] = np.float64(0.0); h['r_c'] = np.float64(0.0); h['cNFW'] = np.float64(0.0)
+    h['rho_0'] = np.float64(0.0); h['r_c'] = np.float64(0.0); h['cNFW'] = np.float64(np.nan); h['cNFWerr'] = np.float64(np.nan)
+    h['vmaxcir'] = np.float64(np.nan); h['rmaxcir'] = np.float64(np.nan)
+    h['inslope'] = np.float64(np.nan); h['inslopeerr'] = np.float64(np.nan)
     h['mcontam'] = np.float64(0.0)
     
 
 liste_halos_o0 = np.empty(0, dtype=halo_dtype)
 #======================================================================
+
+cosmo_table = None
+cosmo_table_key = None
+
+def H_over_H0(aexp):
+    return np.sqrt(omega_f * aexp ** -3 + omega_lambda_f)
+
+def set_cosmology(n=5000):
+    global cosmo_table, cosmo_table_key
+    key = (float(omega_f), float(omega_lambda_f), float(H_f), int(n))
+    if cosmo_table is not None and cosmo_table_key == key:
+        return cosmo_table
+    try:
+        from scipy.integrate import cumulative_trapezoid as cumtrapz
+    except ImportError:
+        from scipy.integrate import cumtrapz
+
+    km = 1e5
+    Gyr = 3.154e16
+    Mpc = 3.08e24
+    aarr = np.linspace(0, 1, n)[1:] ** 2
+    aarr_st = (aarr[:-1] + aarr[1:]) / 2
+    duda = 1. / (aarr_st ** 3 * H_over_H0(aarr_st))
+    dtda = 1. / (H_f * km * Gyr / Mpc * aarr_st * H_over_H0(aarr_st))
+    aarr = aarr[1:]
+
+    uarr = cumtrapz(duda[::-1], aarr[::-1], initial=0)[::-1]
+    tarr = cumtrapz(dtda, aarr, initial=0)
+    cosmo_table = np.core.records.fromarrays(
+        [aarr, tarr, uarr],
+        dtype=[('aexp', 'f8'), ('t', 'f8'), ('u', 'f8')])
+    cosmo_table_key = key
+    return cosmo_table
+
+def interpolate_cosmo_table(value, name1, name2):
+    table = set_cosmology()
+    return np.interp(value, table[name1], table[name2])
+
+def epoch_to_age(epoch):
+    return interpolate_cosmo_table(epoch, 'u', 't')
 
 
 #======================================================================

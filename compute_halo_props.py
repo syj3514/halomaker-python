@@ -317,11 +317,13 @@ def _compute_halo_props(ih1, member, fagor, printdatacheckhalo):
         t0 = time.time()
     det_mass_17(h, member=member)
     det_center_18(h, member=member)
+    refine_centers_1b(h, member=member)
     compute_ang_mom_19(h, member=member)
     r_halos_1a(h, member=member)
     det_vir_1b(h, fagor=fagor, member=member)
     compute_spin_parameter_1c(h)
     compute_stellar_1d(h, member=member)
+    compute_extended_profiles_1e(h, member=member)
 
     if(printdatacheckhalo): print('> mass:', h['m'], 'mhalo:', h['mdm'], 'mstar:', h['m*'])
     if(printdatacheckhalo): print('> center:', h['px'],h['py'],h['pz'])
@@ -364,6 +366,8 @@ def new_step_1():
         if(H.allocated('whereIam_parts')): H.deallocate('whereIam_parts')
         if(H.allocated('refmask_10')): H.deallocate('refmask_10')
         if(H.allocated('id_10')): H.deallocate('id_10')
+        if(H.allocated('age_10')): H.deallocate('age_10')
+        if(H.allocated('metal_10')): H.deallocate('metal_10')
         if(len(H.liste_halos_o0)>0): H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
         return
     if(H.verbose): print(f"\n$$ Read data done ({time.time()-_ref:.2f} sec)", flush=True)
@@ -410,6 +414,8 @@ def new_step_1():
         H.deallocate('pos_10','vel_10')
         if(H.allocated('density_1312')): H.deallocate('density_1312')
         if(H.allocated('mass_10')): H.deallocate('mass_10')
+        if(H.allocated('age_10')): H.deallocate('age_10')
+        if(H.allocated('metal_10')): H.deallocate('metal_10')
         H.deallocate('whereIam_parts')
         return
 
@@ -569,12 +575,14 @@ def new_step_1():
     if H.allocated('refmask_10'): H.deallocate('refmask_10')
     H.deallocate('whereIam_idxs','whereIam_counts','pids0_groupsorted')
     if(H.allocated('mass_10')): H.deallocate('mass_10')
+    if(H.allocated('age_10')): H.deallocate('age_10')
+    if(H.allocated('metal_10')): H.deallocate('metal_10')
     if(not H.cdm): H.deallocate('density_1312')
 
     read_time_end = time.time()
 
-    if(H.megaverbose): 
-        print('> time_step computations took : ',round(read_time_end - read_time_ini),' seconds', flush=True)
+    print('> time_step computations took : ',round(read_time_end - read_time_ini),' seconds', flush=True)
+    if(H.megaverbose):
         ttotal = sum([t for _, t in timereport if t>=0])
         for name, t in timereport:
             if t >= 0:
@@ -808,9 +816,26 @@ def compute_ang_mom_19(h:np.void, member:tuple):
     h['Lx'] = np.sum(lxs)
     h['Ly'] = np.sum(lys)
     h['Lz'] = np.sum(lzs)
-    h['Lx*'] = np.sum(lxs[~dmmask])
-    h['Ly*'] = np.sum(lys[~dmmask])
-    h['Lz*'] = np.sum(lzs[~dmmask])
+    if((~dmmask).any() and np.isfinite(h['px*'])):
+        spos = ipos[~dmmask]
+        svel = ivel[~dmmask]
+        smass = imass[~dmmask]
+        svx = np.sum(smass * svel[:,0]) / h['m*']
+        svy = np.sum(smass * svel[:,1]) / h['m*']
+        svz = np.sum(smass * svel[:,2]) / h['m*']
+        sdrx = correct_for_periodicity_1d(spos[:,0] - h['px*'])
+        sdry = correct_for_periodicity_1d(spos[:,1] - h['py*'])
+        sdrz = correct_for_periodicity_1d(spos[:,2] - h['pz*'])
+        spvx = smass * (svel[:,0] - svx)
+        spvy = smass * (svel[:,1] - svy)
+        spvz = smass * (svel[:,2] - svz)
+        h['Lx*'] = np.sum(sdry*spvz - sdrz*spvy)
+        h['Ly*'] = np.sum(sdrz*spvx - sdrx*spvz)
+        h['Lz*'] = np.sum(sdrx*spvy - sdry*spvx)
+    else:
+        h['Lx*'] = np.float64(np.nan)
+        h['Ly*'] = np.float64(np.nan)
+        h['Lz*'] = np.float64(np.nan)
 
 
 #***********************************************************************
@@ -820,6 +845,7 @@ def r_halos_1a(h:np.void, member:tuple):
     is either center of mass or most bound particle)
     '''
     # (count, indexps, mypos, myvel, mymass, mydensity)
+    indexps = member[1]
     ipos = member[2]
     drxs = correct_for_periodicity_1d(ipos[:,0] - h['px'])
     drys = correct_for_periodicity_1d(ipos[:,1] - h['py'])
@@ -828,6 +854,15 @@ def r_halos_1a(h:np.void, member:tuple):
     dr2max = np.max(dr2s)
 
     h['r'] = np.sqrt(dr2max)
+    starmask = indexps >= H.ndm
+    if(starmask.any() and np.isfinite(h['px*'])):
+        spos = ipos[starmask]
+        drxs = correct_for_periodicity_1d(spos[:,0] - h['px*'])
+        drys = correct_for_periodicity_1d(spos[:,1] - h['py*'])
+        drzs = correct_for_periodicity_1d(spos[:,2] - h['pz*'])
+        h['r*'] = np.sqrt(np.max(drxs**2 + drys**2 + drzs**2))
+    else:
+        h['r*'] = np.float64(np.nan)
 
 #***********************************************************************
 def correct_for_periodicity(dr:vector, copy=False):
@@ -1147,14 +1182,6 @@ def det_vir_1b(h:np.void, fagor:FortranFile=None, member=None):
     '''
     determine virial properties of the halos, energies and profiles
     '''
-    if(H.method != "FOF" and H.DPMMC):
-        x0=h['px'];y0=h['py'];z0=h['pz'];r0=h['r']
-        nx=9 # The initial mesh have a size of 2 times the maximum radius (~virial radius)
-        det_halo_center_multiscale_1b0(h,x0,y0,z0,r0,nx, member=member)
-    if(H.method != "FOF" and H.SC):
-        x0=h['px'];y0=h['py'];z0=h['pz'];r0=h['r']
-        det_halo_center_sphere_1b1(h,x0,y0,z0,r0, member=member)
-
     # compute principal axis of halo
     d,v = det_main_axis_1b2(h, member=member) # d [Mpc], v [dimensionless]
  
@@ -1445,6 +1472,58 @@ def det_halo_center_sphere_1b1(h:np.void,x0,y0,z0,r0, member=None):
         h['py']=ipos[argmin,1]
         h['pz']=ipos[argmin,2]
 
+def _radius_from_center(ipos, x0, y0, z0):
+    if(len(ipos) == 0):
+        return np.float64(np.nan)
+    drxs = correct_for_periodicity_1d(ipos[:,0] - x0)
+    drys = correct_for_periodicity_1d(ipos[:,1] - y0)
+    drzs = correct_for_periodicity_1d(ipos[:,2] - z0)
+    return np.sqrt(np.max(drxs**2 + drys**2 + drzs**2))
+
+def _member_subset(member, mask):
+    count, indexps, ipos, ivel, imass, idensity = member
+    return (np.int32(np.sum(mask)), indexps[mask], ipos[mask], ivel[mask], imass[mask], idensity[mask])
+
+def refine_centers_1b(h:np.void, member=None):
+    count, indexps, ipos, ivel, imass, idensity = member
+    if(H.method != "FOF"):
+        r0 = _radius_from_center(ipos, h['px'], h['py'], h['pz'])
+        if(np.isfinite(r0) and r0 > 0):
+            if(H.DPMMC):
+                nx=9
+                det_halo_center_multiscale_1b0(h,h['px'],h['py'],h['pz'],r0,nx, member=member)
+                r0 = _radius_from_center(ipos, h['px'], h['py'], h['pz'])
+            if(H.SC):
+                det_halo_center_sphere_1b1(h,h['px'],h['py'],h['pz'],r0, member=member)
+
+    starmask = indexps >= H.ndm
+    h['px*'] = np.float64(np.nan)
+    h['py*'] = np.float64(np.nan)
+    h['pz*'] = np.float64(np.nan)
+    if(not starmask.any()):
+        return
+
+    star_member = _member_subset(member, starmask)
+    _, _, spos, _, _, sdensity = star_member
+    imax = np.argmax(sdensity)
+    total_center = (np.float64(h['px']), np.float64(h['py']), np.float64(h['pz']))
+    h['px'] = spos[imax,0]
+    h['py'] = spos[imax,1]
+    h['pz'] = spos[imax,2]
+    if(H.method != "FOF"):
+        r0 = _radius_from_center(spos, h['px'], h['py'], h['pz'])
+        if(np.isfinite(r0) and r0 > 0):
+            if(H.DPMMC):
+                nx=9
+                det_halo_center_multiscale_1b0(h,h['px'],h['py'],h['pz'],r0,nx, member=star_member)
+                r0 = _radius_from_center(spos, h['px'], h['py'], h['pz'])
+            if(H.SC):
+                det_halo_center_sphere_1b1(h,h['px'],h['py'],h['pz'],r0, member=star_member)
+    h['px*'] = h['px']
+    h['py*'] = h['py']
+    h['pz*'] = h['pz']
+    h['px'], h['py'], h['pz'] = total_center
+
 #***********************************************************************
 def compute_spin_parameter_1c(h:np.void):
     hl                  = np.sqrt(h['Lx']**2 + h['Ly']**2 + h['Lz']**2)
@@ -1453,22 +1532,139 @@ def compute_spin_parameter_1c(h:np.void):
 
 def compute_stellar_1d(h:np.void, member=None):
     count, indexps, mypos, myvel, mymass, mydensity = member
-    h['r50'] = -1
-    h['r90'] = -1
+    h['r50'] = np.float64(np.nan)
+    h['r90'] = np.float64(np.nan)
     starmask = indexps >= H.ndm
-    if starmask.any():
-        drxs = correct_for_periodicity_1d(mypos[starmask,0] - h['px'])
-        drys = correct_for_periodicity_1d(mypos[starmask,1] - h['py'])
-        drzs = correct_for_periodicity_1d(mypos[starmask,2] - h['pz'])
+    if starmask.any() and np.isfinite(h['px*']):
+        star_indices = indexps[starmask] - H.ndm
+        star_masses = mymass[starmask]
+        star_ages = mem['age_10'][star_indices]
+        star_metals = mem['metal_10'][star_indices]
+        drxs = correct_for_periodicity_1d(mypos[starmask,0] - h['px*'])
+        drys = correct_for_periodicity_1d(mypos[starmask,1] - h['py*'])
+        drzs = correct_for_periodicity_1d(mypos[starmask,2] - h['pz*'])
         dr2 = drxs**2 + drys**2 + drzs**2
         sorted_indices = np.argsort(dr2)
-        sorted_masses = mymass[starmask][sorted_indices]
+        sorted_masses = star_masses[sorted_indices]
         cumulative_mass = np.cumsum(sorted_masses)
         total_stellar_mass = cumulative_mass[-1]
         r50_index = np.searchsorted(cumulative_mass, 0.5 * total_stellar_mass)
         r90_index = np.searchsorted(cumulative_mass, 0.9 * total_stellar_mass)
         h['r50'] = np.sqrt(dr2[sorted_indices[r50_index]])
         h['r90'] = np.sqrt(dr2[sorted_indices[r90_index]])
+
+        h['age'] = np.average(star_ages, weights=star_masses)
+        h['metal'] = np.average(star_metals, weights=star_masses)
+        inside_r50 = dr2 < h['r50']**2
+        inside_r90 = dr2 < h['r90']**2
+
+        young100 = star_ages < 0.1
+        h['SFR'] = np.sum(star_masses[young100]) * 1.0e3
+        h['SFR_r50'] = np.sum(star_masses[young100 & inside_r50]) * 1.0e3
+        h['SFR_r90'] = np.sum(star_masses[young100 & inside_r90]) * 1.0e3
+
+        young10 = star_ages < 0.01
+        h['SFR10'] = np.sum(star_masses[young10]) * 1.0e4
+        h['SFR10_r50'] = np.sum(star_masses[young10 & inside_r50]) * 1.0e4
+        h['SFR10_r90'] = np.sum(star_masses[young10 & inside_r90]) * 1.0e4
+
+def compute_extended_profiles_1e(h:np.void, member=None):
+    count, indexps, ipos, ivel, imass, idensity = member
+    h['vmaxcir'] = np.float64(np.nan)
+    h['rmaxcir'] = np.float64(np.nan)
+    h['cNFWerr'] = np.float64(np.nan)
+    h['inslope'] = np.float64(np.nan)
+    h['inslopeerr'] = np.float64(np.nan)
+
+    drxs = correct_for_periodicity_1d(ipos[:,0] - h['px'])
+    drys = correct_for_periodicity_1d(ipos[:,1] - h['py'])
+    drzs = correct_for_periodicity_1d(ipos[:,2] - h['pz'])
+    dist = np.sqrt(drxs**2 + drys**2 + drzs**2)
+
+    nonzero = dist > 0
+    if(np.sum(nonzero) > 0):
+        order = np.argsort(dist[nonzero])
+        sdist = dist[nonzero][order]
+        smass = imass[nonzero][order]
+        vcir = np.sqrt(H.gravconst * np.cumsum(smass) / sdist)
+        imax = np.argmax(vcir)
+        h['vmaxcir'] = vcir[imax]
+        h['rmaxcir'] = sdist[imax]
+
+    dmmask = (indexps < H.ndm) & nonzero
+    ndm = np.sum(dmmask)
+    if(ndm < 8 or h['rvir'] <= 0):
+        h['cNFW'] = np.float64(np.nan)
+        return
+
+    dmdist = dist[dmmask]
+    dmmass = imass[dmmask]
+    order = np.argsort(dmdist)
+    dmdist = dmdist[order]
+    dmmass = dmmass[order]
+    rvir = h['rvir']
+    inside = dmdist <= rvir
+    if(np.sum(inside) < 8):
+        h['cNFW'] = np.float64(np.nan)
+        return
+    dmdist = dmdist[inside]
+    dmmass = dmmass[inside]
+
+    try:
+        from scipy.optimize import curve_fit
+
+        def log_nfw(r, rs, logrho0):
+            x = r / rs
+            return logrho0 - np.log10(x) - 2.0*np.log10(1.0 + x)
+
+        nbins = max(8, min(80, int(np.sqrt(len(dmdist)))))
+        bins = np.logspace(np.log10(dmdist[0]), np.log10(dmdist[-1]), nbins + 1)
+        shell_mass, _ = np.histogram(dmdist, bins=bins, weights=dmmass)
+        shell_num, _ = np.histogram(dmdist, bins=bins)
+        shell_vol = 4.0/3.0*H.pi*(bins[1:]**3 - bins[:-1]**3)
+        radius = 0.5*(bins[1:] + bins[:-1])
+        valid = (shell_num > 0) & (shell_mass > 0) & (shell_vol > 0)
+        if(np.sum(valid) >= 4):
+            rho = shell_mass[valid] / shell_vol[valid]
+            radius = radius[valid]
+            sigma = 1.0 / np.sqrt(shell_num[valid])
+            popt, pcov = curve_fit(
+                log_nfw, radius, np.log10(rho),
+                p0=[max(rvir/10.0, radius[0]), np.log10(rho[0])],
+                sigma=sigma, absolute_sigma=False,
+                bounds=([0.0, -np.inf], [rvir, np.inf]),
+            )
+            rs = popt[0]
+            rs_err = np.sqrt(pcov[0,0]) if pcov.size else np.nan
+            h['cNFW'] = rvir / rs
+            h['cNFWerr'] = h['cNFW'] * np.sqrt((rs_err/rs)**2) if rs > 0 else np.nan
+        else:
+            h['cNFW'] = np.float64(np.nan)
+    except Exception:
+        h['cNFW'] = np.float64(np.nan)
+        h['cNFWerr'] = np.float64(np.nan)
+
+    try:
+        rs = rvir / h['cNFW'] if np.isfinite(h['cNFW']) and h['cNFW'] > 0 else rvir
+        rcut = min(rs, rvir)
+        mask = dmdist < rcut
+        if(np.sum(mask) >= 4):
+            xx = np.log10(dmdist[mask] / rvir)
+            shell_vol = 4.0/3.0*H.pi*dmdist[mask]**3
+            shell_vol = np.diff(np.insert(shell_vol, 0, 0.0))
+            valid = (shell_vol > 0) & (dmmass[mask] > 0)
+            xx = xx[valid]
+            yy = np.log10(dmmass[mask][valid] / shell_vol[valid])
+            if(len(xx) >= 4):
+                from scipy.optimize import curve_fit
+                def linefit(x, a, b):
+                    return a*x + b
+                popt, pcov = curve_fit(linefit, xx, yy)
+                h['inslope'] = popt[0]
+                h['inslopeerr'] = np.sqrt(pcov[0,0]) if pcov.size else np.nan
+    except Exception:
+        h['inslope'] = np.float64(np.nan)
+        h['inslopeerr'] = np.float64(np.nan)
 
 
 

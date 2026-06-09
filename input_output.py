@@ -99,6 +99,8 @@ def read_data_10():
             if(H.allocated('whereIam_parts')): H.deallocate('whereIam_parts')
             if(H.allocated('refmask_10')): H.deallocate('refmask_10')
             if(H.allocated('id_10')): H.deallocate('id_10')
+            if(H.allocated('age_10')): H.deallocate('age_10')
+            if(H.allocated('metal_10')): H.deallocate('metal_10')
             if(len(H.liste_halos_o0)>0): H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
             return
     
@@ -290,17 +292,20 @@ def _read_ramses_new_1010(icpu, kwargs):
         idp = f.read_ints()
         # read grid level of particles
         skip_records(f, 1)
+        tmpt = None
+        tmpmetal = None
         if(rver=='Ra4'):
             # read particle family
             fam = f.read_ints(dtype=np.int8)
             # read particle tag
             skip_records(f, 1)
-        else:
-            # read all particle creation times if necessary
-            if((nstar>0)or(nsink>0)):
+        if((nstar>0)or(nsink>0)):
+            if(rver != 'Ra4' or not dmcount):
                 tmpt = f.read_reals()
-                if(H.METALS):
-                    skip_records(f, 1)
+            if not dmcount:
+                tmpmetal = f.read_reals()
+            elif rver != 'Ra4':
+                skip_records(f, 1)
     # now sort DM particles in ascending id order and get rid of stars
     if(rver=='Ra4'):
         dmmask = fam==1
@@ -310,6 +315,8 @@ def _read_ramses_new_1010(icpu, kwargs):
             starmask = (fam==2)
             mask = dmmask | starmask
     else:
+        if tmpt is None:
+            tmpt = np.zeros(npart2, dtype=np.float64)
         dmmask = (idp>0)&(tmpt==0)
         if dmcount:
             mask = dmmask
@@ -318,6 +325,7 @@ def _read_ramses_new_1010(icpu, kwargs):
             mask = dmmask | starmask
     if not dmcount:
         idp = np.abs(idp)
+        star_slots = idp[starmask] - 1
         idp = np.where(starmask, idp+H.ndm, idp)
     npart_tmp = np.sum(mask)
     if not dmcount:
@@ -329,6 +337,12 @@ def _read_ramses_new_1010(icpu, kwargs):
             # convert code units to km/s 
             mem['vel_tmp_101'][ind,idim0] = tmpv[mask,idim0]*scale_l/scale_t*1e-5
         mem['mass_tmp_101'][ind] = tmpm[mask]
+        if starmask.any():
+            age_10 = H.maccess('age_10')
+            metal_10 = H.maccess('metal_10')
+            age_10[star_slots] = (
+                kwargs['snapshot_age'] - H.epoch_to_age(tmpt[starmask]))
+            metal_10[star_slots] = tmpmetal[starmask]
     return npart_tmp
 #***********************************************************************
 import time
@@ -404,6 +418,8 @@ def read_ramses_new_101(repository, rver='Ra3'):
     if(H.verbose): print(f"\t|>     boxlen={boxlen*scale_l/np.float64(3.08e24):.3e} h-1 Mpc")
     H.Lf = boxlen*scale_l/3.08e24/aexp_ram # Override
     H.mboxp     = np.float64(2.78782)*(H.Lf**3)*(H.H_f/100.)**2*H.omega_f # Override
+    H.set_cosmology()
+    snapshot_age = H.epoch_to_age(tco)
 
     # now read the particle data files
     nomfich = f"{repository}/part_{nchar}.out00001"
@@ -439,7 +455,10 @@ def read_ramses_new_101(repository, rver='Ra3'):
     H.massalloc = True
   
     # Count only DM particles
-    kwargs = {'repository':repository, 'rver':rver, 'nchar':nchar, 'ndim':H.ndim, 'scale_l':scale_l, 'scale_t':scale_t, 'dmcount':True}
+    kwargs = {
+        'repository':repository, 'rver':rver, 'nchar':nchar,
+        'ndim':H.ndim, 'scale_l':scale_l, 'scale_t':scale_t,
+        'snapshot_age':snapshot_age, 'dmcount':True}
     iterobj = range(1,H.ncpu+1)
     if(H.nbPes==1): # Sequential reading
         if(H.TQDM)and(H.megaverbose): pbar = tqdm(total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", file=sys.stdout, disable=(not H.megaverbose), ncols=100)
@@ -467,6 +486,11 @@ def read_ramses_new_101(repository, rver='Ra3'):
     if(H.verbose): print(f"\t|> Found {H.ndm} DM particles after masking")
 
     H.nusedpart = H.ndm + H.nstar
+    if H.nstar > 0:
+        H.allocate('age_10', (H.nstar,), dtype=np.float64)
+        H.allocate('metal_10', (H.nstar,), dtype=np.float64)
+        mem['age_10'][:] = np.nan
+        mem['metal_10'][:] = np.nan
     # Read all parts
     kwargs['dmcount'] = False
     iterobj = range(1,H.ncpu+1)
@@ -495,6 +519,18 @@ def read_ramses_new_101(repository, rver='Ra3'):
     H.npart = npart
     if(H.verbose): print(f"\t|> Reading parts done", flush=True)
     if(H.verbose): print(f"\t|> Found {H.npart} (DM+Star) particles after masking")
+    if H.nstar > 0:
+        n_age = np.sum(np.isfinite(mem['age_10']))
+        n_metal = np.sum(np.isfinite(mem['metal_10']))
+        if n_age != H.nstar or n_metal != H.nstar:
+            raise RuntimeError(
+                f"Incomplete stellar properties: age={n_age}, metal={n_metal}, "
+                f"expected={H.nstar}")
+    if(H.verbose and H.nstar > 0):
+        print(f"\t|> Stellar age range (Gyr)          = "
+              f"{np.min(mem['age_10']):.6g} .. {np.max(mem['age_10']):.6g}")
+        print(f"\t|> Stellar metallicity range        = "
+              f"{np.min(mem['metal_10']):.6g} .. {np.max(mem['metal_10']):.6g}")
     H.allocate('pos_10', (H.npart, H.ndim), dtype=np.float64)
     H.allocate('vel_10', (H.npart, H.ndim), dtype=np.float64)
     H.allocate('mass_10', (H.npart,), dtype=np.float64)
@@ -556,12 +592,6 @@ def write_tree_brick_1d():
     '''
     import os
     nchar   = f'{int(H.file_num):05d}'
-    if(H.dump_dms):
-        #    call system('mkdir HAL_'//TRIM(nchar))
-        os.mkdir(f'HAL_{nchar}')    
-        full_path = os.path.abspath(f'HAL_{nchar}')
-        os.chmod(full_path, H.dchmod); os.chown(full_path, H.uid, H.gid)
-
     if(H.BIG_RUN):
         if(H.write_resim_masses):
             f44 = FortranFile(f'{H.output_dir}/resim_masses{H.prefix}.dat', 'w')
@@ -681,12 +711,6 @@ def write_tree_brick_hdf():
     '''
     import os, h5py
     nchar   = f'{int(H.file_num):05d}'
-    if(H.dump_dms):
-        #    call system('mkdir HAL_'//TRIM(nchar))
-        os.mkdir(f'HAL_{nchar}')    
-        full_path = os.path.abspath(f'HAL_{nchar}')
-        os.chmod(full_path, H.dchmod); os.chown(full_path, H.uid, H.gid)
-
     if(H.BIG_RUN):
         if(H.write_resim_masses):
             f44 = FortranFile(f'{H.output_dir}/resim_masses{H.prefix}.dat', 'w')
@@ -782,29 +806,37 @@ def write_tree_brick_hdf():
         #---------------------------------
         # cumsum index, 1d member IDs, ...
         grp = f44.create_group('member')
+        grp.attrs['index_base'] = 1
+        grp.attrs['layout'] = 'flat'
         grp.create_dataset('index', data=whereIam_idxs, compression='lzf')
+        grp.create_dataset('count', data=whereIam_counts, compression='lzf')
         pids = pids0_groupsorted+1 # 0-based to 1-based
         
-        grp.create_dataset('pids', data=pids, compression='lzf')
+        member_chunk = min(max(1, len(pids)), 65536)
+        grp.create_dataset('pids', data=pids, compression='lzf', chunks=(member_chunk,))
         if H.dump_dms:
-            iterator = range(H.nb_of_halos + H.nb_of_subhalos)
+            grp.attrs['fields'] = 'pids,pos,vel,mass'
+            pos_ds = grp.create_dataset(
+                'pos', shape=(len(pids), 3), dtype=pos_10.dtype,
+                compression='lzf', chunks=(member_chunk, 3))
+            vel_ds = grp.create_dataset(
+                'vel', shape=(len(pids), 3), dtype=vel_10.dtype,
+                compression='lzf', chunks=(member_chunk, 3))
+            mass_ds = grp.create_dataset(
+                'mass', shape=(len(pids),), dtype=mass_10.dtype,
+                compression='lzf', chunks=(member_chunk,))
+            pos_ds.attrs['unit'] = 'Mpc physical, centered box coordinates'
+            vel_ds.attrs['unit'] = 'km/s peculiar'
+            mass_ds.attrs['unit'] = '1e11 Msun'
+            iterator = range(0, len(pids), member_chunk)
             if H.verbose:
-                iterator = tqdm(iterator, desc="Writing halo members", unit="halo", ncols=100)
-            for i0 in iterator:
-                idx = whereIam_idxs[i0+1]
-                count = whereIam_counts[i0+1]
-                indexps = pids[idx:idx+count] # 1-based
-                # write list of particles in each halo
-                if(H.dump_dms):
-                    mass_memb = mass_10[indexps-1]
-                    pos_memb = pos_10[indexps-1]
-                    vel_memb = vel_10[indexps-1]
-
-                mgrp=grp.create_group(f"{i0+1:07d}")
-                mgrp.create_dataset('id', data=indexps, compression='gzip')
-                mgrp.create_dataset('pos', data=pos_memb, compression='gzip')
-                mgrp.create_dataset('vel', data=vel_memb, compression='gzip')
-                mgrp.create_dataset('m', data=mass_memb, compression='gzip')
+                iterator = tqdm(iterator, desc="Writing flat halo members", unit="chunk", ncols=100)
+            for start in iterator:
+                end = min(start + member_chunk, len(pids))
+                src = pids0_groupsorted[start:end]
+                pos_ds[start:end, :] = pos_10[src, :]
+                vel_ds[start:end, :] = vel_10[src, :]
+                mass_ds[start:end] = mass_10[src]
 
     full_path = os.path.abspath(filename)
     os.chmod(full_path, H.fchmod); os.chown(full_path, H.uid, H.gid)
