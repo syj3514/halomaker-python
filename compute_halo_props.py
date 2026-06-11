@@ -5,6 +5,10 @@ import time, os
 import numpy as np
 from scipy.io import FortranFile
 from itertools import combinations
+from ssp_photometry import (
+    BANDS, MODELS, interpolation_coordinates, interpolate_magnitude,
+    load_all_tables,
+)
 
 #//////////////////////////////////////////////////////////////////////////
 #**************************************************************************
@@ -323,6 +327,7 @@ def _compute_halo_props(ih1, member, fagor, printdatacheckhalo):
     det_vir_1b(h, fagor=fagor, member=member)
     compute_spin_parameter_1c(h)
     compute_stellar_1d(h, member=member)
+    compute_ssp_photometry_1f(ih1, h, member=member)
     compute_extended_profiles_1e(h, member=member)
 
     if(printdatacheckhalo): print('> mass:', h['m'], 'mhalo:', h['mdm'], 'mstar:', h['m*'])
@@ -485,6 +490,16 @@ def new_step_1():
     # allocation and initialization of the halo list
     H.allocate('liste_halos_o0', H.nb_of_halos+H.nb_of_subhalos+1, dtype=H.halo_dtype)
     H.liste_halos_o0 = mem['liste_halos_o0']
+    for model in MODELS:
+        photometry = H.allocate(
+            f'photometry_{model.lower()}',
+            H.nb_of_halos+H.nb_of_subhalos+1,
+            dtype=H.photometry_ssp_dtype,
+        )
+        photometry['id'] = 0
+        for field in H.photometry_ssp_fields:
+            photometry[field] = np.nan
+    load_all_tables()
     # (liste_halos_o0 is list of `halo` class, and defined in `halo_defs`)
     # (It may should be changed to shared memory if you want to implement the multiprocessing)
 
@@ -570,6 +585,8 @@ def new_step_1():
     # H.liste_halos_o0 = []
     H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
     H.deallocate('liste_halos_o0')
+    for model in MODELS:
+        H.deallocate(f'photometry_{model.lower()}')
     # H.deallocate('nb_of_parts_o0_1','first_part_oo_1','linked_list_oo_1')
     H.deallocate('pos_10','vel_10')
     if H.allocated('refmask_10'): H.deallocate('refmask_10')
@@ -1567,6 +1584,67 @@ def compute_stellar_1d(h:np.void, member=None):
         h['SFR10'] = np.sum(star_masses[young10]) * 1.0e4
         h['SFR10_r50'] = np.sum(star_masses[young10 & inside_r50]) * 1.0e4
         h['SFR10_r90'] = np.sum(star_masses[young10 & inside_r90]) * 1.0e4
+
+def compute_ssp_photometry_1f(ih1, h:np.void, member=None):
+    count, indexps, mypos, myvel, mymass, mydensity = member
+    for model in MODELS:
+        mem[f'photometry_{model.lower()}'][ih1]['id'] = h['id']
+
+    starmask = indexps >= H.ndm
+    if np.count_nonzero(starmask) == 0 or not np.isfinite(h['px*']):
+        return
+
+    star_indices = indexps[starmask] - H.ndm
+    age = mem['age_10'][star_indices]
+    metal = mem['metal_10'][star_indices]
+    mass_msol = mymass[starmask] * 1.0e11
+    valid = (
+        np.isfinite(age) & (age > 0)
+        & np.isfinite(metal) & (metal > 0)
+        & np.isfinite(mass_msol) & (mass_msol > 0)
+    )
+    if np.count_nonzero(valid) == 0:
+        return
+
+    age = age[valid]
+    metal = metal[valid]
+    mass_msol = mass_msol[valid]
+    star_pos = mypos[starmask][valid]
+    drx = correct_for_periodicity_1d(star_pos[:,0] - h['px*'])
+    dry = correct_for_periodicity_1d(star_pos[:,1] - h['py*'])
+    drz = correct_for_periodicity_1d(star_pos[:,2] - h['pz*'])
+    radius = np.sqrt(drx**2 + dry**2 + drz**2)
+    order = np.argsort(radius)
+
+    for model in MODELS:
+        result = mem[f'photometry_{model.lower()}'][ih1]
+        coordinates = interpolation_coordinates(model, age, metal)
+        r_luminosity = None
+        for output_name, _, _ in BANDS:
+            magnitude_per_msol = interpolate_magnitude(
+                model, output_name, coordinates
+            )
+            luminosity = mass_msol * 10.0**(-0.4 * magnitude_per_msol)
+            total_luminosity = np.sum(luminosity)
+            if np.isfinite(total_luminosity) and total_luminosity > 0:
+                result[output_name] = -2.5 * np.log10(total_luminosity)
+            if output_name == 'rmag':
+                r_luminosity = luminosity
+
+        total_r_luminosity = np.sum(r_luminosity)
+        if not np.isfinite(total_r_luminosity) or total_r_luminosity <= 0:
+            continue
+        result['age_r'] = np.average(age, weights=r_luminosity)
+        result['metal_r'] = np.average(metal, weights=r_luminosity)
+        cumulative_luminosity = np.cumsum(r_luminosity[order])
+        i50 = np.searchsorted(
+            cumulative_luminosity, 0.5 * total_r_luminosity
+        )
+        i90 = np.searchsorted(
+            cumulative_luminosity, 0.9 * total_r_luminosity
+        )
+        result['r50_r'] = radius[order[min(i50, len(order)-1)]]
+        result['r90_r'] = radius[order[min(i90, len(order)-1)]]
 
 def compute_extended_profiles_1e(h:np.void, member=None):
     count, indexps, ipos, ivel, imass, idensity = member

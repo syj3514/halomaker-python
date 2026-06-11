@@ -16,7 +16,13 @@ dependencies = [
     "tqdm>=4.66",
 ]
 
+[project.optional-dependencies]
+ssp-generation = [
+    "fsps==0.4.7",
+]
+
 [tool.setuptools]
+packages = ["halomaker_data", "halomaker_data.ssp_tables"]
 py-modules = [
     "HaloMaker",
     "compute_halo_props",
@@ -25,4 +31,8 @@ py-modules = [
     "hdf_output_example",
     "input_output",
     "num_rec",
+    "ssp_photometry",
 ]
+
+[tool.setuptools.package-data]
+"halomaker_data.ssp_tables" = ["*.npz"]

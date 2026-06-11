@@ -292,6 +292,16 @@ def clear_halo(h):
     
 
 liste_halos_o0 = np.empty(0, dtype=halo_dtype)
+
+photometry_ssp_dtype = np.dtype([
+    ('id', 'i4'),
+    ('umag', 'f8'), ('gmag', 'f8'), ('rmag', 'f8'),
+    ('imag', 'f8'), ('zmag', 'f8'),
+    ('Umag', 'f8'), ('Bmag', 'f8'), ('Vmag', 'f8'), ('Kmag', 'f8'),
+    ('age_r', 'f8'), ('metal_r', 'f8'),
+    ('r50_r', 'f8'), ('r90_r', 'f8'),
+])
+photometry_ssp_fields = photometry_ssp_dtype.names[1:]
 #======================================================================
 
 cosmo_table = None

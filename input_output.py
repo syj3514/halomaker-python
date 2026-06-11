@@ -801,6 +801,28 @@ def write_tree_brick_hdf():
         grp = f44.create_group('catalog')
         grp.create_dataset('halo', shape=cat.shape, dtype=cat.dtype, data=cat, compression='lzf')
 
+        from ssp_photometry import MODELS, model_metadata
+        photometry = f44.create_group('photometry')
+        for requested_model in MODELS:
+            model, metadata = model_metadata(requested_model)
+            model_group = photometry.create_group(model)
+            for key, value in metadata.items():
+                model_group.attrs[key] = value
+            model_group.attrs['mass_source'] = 'current_mass_fallback'
+            model_group.attrs['interpolation'] = 'bilinear in log-age/log-metallicity, magnitude space'
+            model_group.attrs['frame'] = 'intrinsic rest-frame'
+            model_group.attrs['dust'] = False
+            model_group.attrs['nebular_emission'] = False
+            model_group.attrs['SDSS_system'] = 'AB'
+            model_group.attrs['Johnson_system'] = 'Vega'
+            model_group.attrs['row_alignment'] = '/catalog/halo'
+            model_group.attrs['fields'] = ','.join(H.photometry_ssp_dtype.names)
+            photo = mem[f'photometry_{model.lower()}'][1:]
+            model_group.create_dataset(
+                'data', shape=photo.shape, dtype=photo.dtype,
+                data=photo, compression='lzf',
+            )
+
         #---------------------------------
         # Member
         #---------------------------------

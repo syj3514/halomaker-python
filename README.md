@@ -117,6 +117,18 @@ bash run.sh
 
 The main HDF5 catalog output is written as `tree_bricks*.h5`.
 
+Each run computes intrinsic rest-frame stellar photometry with all bundled SSP
+models and writes the aligned results under:
+
+- `/photometry/CB07/data`
+- `/photometry/BC03/data`
+- `/photometry/FSPS/data`
+
+The datasets contain SDSS `ugriz`, Johnson `UBV`, `Kmag`, and r-band
+luminosity-weighted stellar age, metallicity, `r50`, and `r90`. FSPS uses the
+2MASS Ks response for its `Kmag`; this distinction is recorded in the group
+metadata. See `SSP_MODELS.md` for model definitions and data provenance.
+
 If a run is interrupted with Ctrl-C, killed by a scheduler, or leaves Python
 `forkserver` / `resource_tracker` processes behind, inspect and clean runtime
 leftovers with:
@@ -142,7 +154,23 @@ memory files owned by the current user.
 - `compute_adaptahop_zoomin.f90`: optimized zoom-in AdaptaHOP extension
 - `compute_adaptahop*.pyf`: explicit f2py interfaces for portable builds
 - `hdf_output_example.py`: simple HDF5 catalog reader example
+- `ssp_photometry.py`: compact SSP-table interpolation
+- `halomaker_data/ssp_tables`: bundled CB07, BC03, and FSPS runtime tables
 - `clean_runtime.sh`: dry-run / cleanup helper for interrupted runs
+
+## Regenerating the FSPS table
+
+FSPS is not required for normal HaloMaker runs. To regenerate the bundled FSPS
+table, install the optional dependency and configure an FSPS source/data tree:
+
+```bash
+uv sync --extra ssp-generation
+export SPS_HOME=/path/to/fsps
+uv run python tools/generate_fsps_table.py
+```
+
+The FSPS source/data installation is intentionally separate because
+`python-fsps` alone does not provide the full model data.
 
 ## Release Checklist
 
