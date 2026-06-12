@@ -373,6 +373,7 @@ def new_step_1():
         if(H.allocated('id_10')): H.deallocate('id_10')
         if(H.allocated('age_10')): H.deallocate('age_10')
         if(H.allocated('metal_10')): H.deallocate('metal_10')
+        if(H.allocated('m0_10')): H.deallocate('m0_10')
         if(len(H.liste_halos_o0)>0): H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
         return
     if(H.verbose): print(f"\n$$ Read data done ({time.time()-_ref:.2f} sec)", flush=True)
@@ -421,6 +422,7 @@ def new_step_1():
         if(H.allocated('mass_10')): H.deallocate('mass_10')
         if(H.allocated('age_10')): H.deallocate('age_10')
         if(H.allocated('metal_10')): H.deallocate('metal_10')
+        if(H.allocated('m0_10')): H.deallocate('m0_10')
         H.deallocate('whereIam_parts')
         return
 
@@ -594,6 +596,7 @@ def new_step_1():
     if(H.allocated('mass_10')): H.deallocate('mass_10')
     if(H.allocated('age_10')): H.deallocate('age_10')
     if(H.allocated('metal_10')): H.deallocate('metal_10')
+    if(H.allocated('m0_10')): H.deallocate('m0_10')
     if(not H.cdm): H.deallocate('density_1312')
 
     read_time_end = time.time()
@@ -1347,6 +1350,8 @@ def change_units_15():
     H.massp = H.massp * H.mboxp
     if (H.allocated('mass_10')):
         mem['mass_10']  *= H.mboxp
+    if H.allocated('m0_10'):
+        mem['m0_10'] *= H.mboxp
 
 #***********************************************************************
 def det_halo_energies_1b3(h:np.void, full_PE=1000, member=None):
@@ -1547,14 +1552,52 @@ def compute_spin_parameter_1c(h:np.void):
     spin                = hl * np.sqrt(np.abs(h['et'])) / h['m']**2.5 / H.gravconst
     h['spin']              = spin
 
+def _stellar_kinematics_1d(mass, dvx, dvy, dvz, vphi, vrad, vzyl, select):
+    select = select & np.isfinite(mass) & (mass > 0)
+    if np.count_nonzero(select) < 2:
+        return np.nan, np.nan, np.nan
+
+    weight = mass[select]
+    weight_sum = np.sum(weight)
+    if not np.isfinite(weight_sum) or weight_sum <= 0:
+        return np.nan, np.nan, np.nan
+
+    sig3d2 = np.average(
+        dvx[select]**2 + dvy[select]**2 + dvz[select]**2,
+        weights=weight,
+    )
+
+    cyl_select = select & np.isfinite(vphi) & np.isfinite(vrad) & np.isfinite(vzyl)
+    if np.count_nonzero(cyl_select) < 2:
+        return np.nan, np.sqrt(max(sig3d2, 0.0)), np.nan
+
+    cyl_weight = mass[cyl_select]
+    vrot = np.average(vphi[cyl_select], weights=cyl_weight)
+    mean_vrad = np.average(vrad[cyl_select], weights=cyl_weight)
+    mean_vzyl = np.average(vzyl[cyl_select], weights=cyl_weight)
+    sigcyl2 = np.average(
+        (vrad[cyl_select] - mean_vrad)**2
+        + (vphi[cyl_select] - vrot)**2
+        + (vzyl[cyl_select] - mean_vzyl)**2,
+        weights=cyl_weight,
+    )
+    return vrot, np.sqrt(max(sig3d2, 0.0)), np.sqrt(max(sigcyl2, 0.0))
+
 def compute_stellar_1d(h:np.void, member=None):
     count, indexps, mypos, myvel, mymass, mydensity = member
     h['r50'] = np.float64(np.nan)
     h['r90'] = np.float64(np.nan)
+    for field in (
+        'vrot', 'sig3d', 'sigcyl',
+        'vrot_r50', 'sig3d_r50', 'sigcyl_r50',
+        'vrot_r90', 'sig3d_r90', 'sigcyl_r90',
+    ):
+        h[field] = np.float64(np.nan)
     starmask = indexps >= H.ndm
     if starmask.any() and np.isfinite(h['px*']):
         star_indices = indexps[starmask] - H.ndm
         star_masses = mymass[starmask]
+        star_vel = myvel[starmask]
         star_ages = mem['age_10'][star_indices]
         star_metals = mem['metal_10'][star_indices]
         drxs = correct_for_periodicity_1d(mypos[starmask,0] - h['px*'])
@@ -1585,6 +1628,71 @@ def compute_stellar_1d(h:np.void, member=None):
         h['SFR10_r50'] = np.sum(star_masses[young10 & inside_r50]) * 1.0e4
         h['SFR10_r90'] = np.sum(star_masses[young10 & inside_r90]) * 1.0e4
 
+        stellar_mass = np.sum(star_masses)
+        angular_momentum = np.array(
+            [h['Lx*'], h['Ly*'], h['Lz*']], dtype=np.float64
+        )
+        angular_momentum_norm = np.linalg.norm(angular_momentum)
+        if (
+            len(star_masses) >= 2
+            and np.isfinite(stellar_mass)
+            and stellar_mass > 0
+        ):
+            bulk_velocity = np.average(star_vel, axis=0, weights=star_masses)
+            dvx = star_vel[:,0] - bulk_velocity[0]
+            dvy = star_vel[:,1] - bulk_velocity[1]
+            dvz = star_vel[:,2] - bulk_velocity[2]
+
+            vphi = np.full(len(star_masses), np.nan, dtype=np.float64)
+            vrad = np.full(len(star_masses), np.nan, dtype=np.float64)
+            vzyl = np.full(len(star_masses), np.nan, dtype=np.float64)
+            if np.isfinite(angular_momentum_norm) and angular_momentum_norm > 0:
+                axis = angular_momentum / angular_momentum_norm
+                zpos = drxs*axis[0] + drys*axis[1] + drzs*axis[2]
+                rperp_x = drxs - zpos*axis[0]
+                rperp_y = drys - zpos*axis[1]
+                rperp_z = drzs - zpos*axis[2]
+                rperp = np.sqrt(rperp_x**2 + rperp_y**2 + rperp_z**2)
+                valid_cyl = rperp > np.finfo(np.float64).eps
+
+                inv_rperp = np.zeros_like(rperp)
+                inv_rperp[valid_cyl] = 1.0 / rperp[valid_cyl]
+                erad_x = rperp_x * inv_rperp
+                erad_y = rperp_y * inv_rperp
+                erad_z = rperp_z * inv_rperp
+                ephi_x = axis[1]*erad_z - axis[2]*erad_y
+                ephi_y = axis[2]*erad_x - axis[0]*erad_z
+                ephi_z = axis[0]*erad_y - axis[1]*erad_x
+
+                vrad[valid_cyl] = (
+                    dvx[valid_cyl]*erad_x[valid_cyl]
+                    + dvy[valid_cyl]*erad_y[valid_cyl]
+                    + dvz[valid_cyl]*erad_z[valid_cyl]
+                )
+                vphi[valid_cyl] = (
+                    dvx[valid_cyl]*ephi_x[valid_cyl]
+                    + dvy[valid_cyl]*ephi_y[valid_cyl]
+                    + dvz[valid_cyl]*ephi_z[valid_cyl]
+                )
+                vzyl[valid_cyl] = (
+                    dvx[valid_cyl]*axis[0]
+                    + dvy[valid_cyl]*axis[1]
+                    + dvz[valid_cyl]*axis[2]
+                )
+
+            all_stars = np.ones(len(star_masses), dtype=bool)
+            for suffix, select in (
+                ('', all_stars),
+                ('_r50', inside_r50),
+                ('_r90', inside_r90),
+            ):
+                vrot, sig3d, sigcyl = _stellar_kinematics_1d(
+                    star_masses, dvx, dvy, dvz, vphi, vrad, vzyl, select
+                )
+                h[f'vrot{suffix}'] = vrot
+                h[f'sig3d{suffix}'] = sig3d
+                h[f'sigcyl{suffix}'] = sigcyl
+
 def compute_ssp_photometry_1f(ih1, h:np.void, member=None):
     count, indexps, mypos, myvel, mymass, mydensity = member
     for model in MODELS:
@@ -1597,7 +1705,10 @@ def compute_ssp_photometry_1f(ih1, h:np.void, member=None):
     star_indices = indexps[starmask] - H.ndm
     age = mem['age_10'][star_indices]
     metal = mem['metal_10'][star_indices]
-    mass_msol = mymass[starmask] * 1.0e11
+    if H.allocated('m0_10'):
+        mass_msol = mem['m0_10'][star_indices] * 1.0e11
+    else:
+        mass_msol = mymass[starmask] * 1.0e11
     valid = (
         np.isfinite(age) & (age > 0)
         & np.isfinite(metal) & (metal > 0)

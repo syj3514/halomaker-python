@@ -5,6 +5,38 @@ PYTHON="${PYTHON:-python}"
 F90="${F90:-gfortran}"
 BRANCH="${BRANCH:-main}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FSPS_TABLE="$ROOT/halomaker_data/ssp_tables/fsps.npz"
+FSPS_SOURCE="${FSPS_PATH:-${SPS_HOME:-}}"
+
+if [[ -f "$FSPS_TABLE" ]]; then
+    echo "Using existing FSPS table: $FSPS_TABLE"
+else
+    if [[ -z "$FSPS_SOURCE" ]]; then
+        cat >&2 <<EOF
+Missing FSPS table: $FSPS_TABLE
+Set FSPS_PATH to an FSPS source/data installation, then rerun build.sh.
+Install the table generator first if needed:
+  uv sync --extra ssp-generation
+EOF
+        exit 1
+    fi
+    if [[ ! -d "$FSPS_SOURCE" ]]; then
+        echo "FSPS_PATH is not a directory: $FSPS_SOURCE" >&2
+        exit 1
+    fi
+    if ! SPS_HOME="$FSPS_SOURCE" "$PYTHON" -c "import fsps" >/dev/null 2>&1; then
+        cat >&2 <<EOF
+python-fsps is required to generate $FSPS_TABLE.
+Install it with:
+  uv sync --extra ssp-generation
+EOF
+        exit 1
+    fi
+
+    echo "Generating FSPS table from: $FSPS_SOURCE"
+    "$PYTHON" "$ROOT/tools/generate_fsps_table.py" \
+        --fsps-path "$FSPS_SOURCE"
+fi
 
 if [[ "$BRANCH" == "main" ]]; then
     BUILD_DIR="$ROOT"

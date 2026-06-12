@@ -1,4 +1,4 @@
-# Bundled SSP Photometry Models
+# SSP Photometry Models
 
 HaloMaker computes all three SSP variants in one run. Each HDF5 photometry
 dataset is row-aligned with `/catalog/halo`; the `id` field provides an
@@ -15,9 +15,11 @@ additional explicit check.
 - Bilinear interpolation in log age and log metallicity, in magnitude space
 - Values outside a model grid are clipped to the nearest grid boundary
 
-The current RAMSES Ra3 input does not provide initial stellar particle mass.
-Consequently, photometry uses current stellar mass as a fallback. This is
-recorded as `mass_source=current_mass_fallback` in every HDF5 model group.
+For Ra4 snapshots with `initial_mass` in `part_file_descriptor.txt`,
+photometry uses the stored initial stellar particle mass. For formats such as
+Ra3 that do not provide it, current stellar mass is used as a fallback. The
+choice is recorded as `mass_source=initial_mass` or
+`mass_source=current_mass_fallback` in every HDF5 model group.
 
 ## CB07
 
@@ -58,11 +60,15 @@ Source:
 
 Source: `https://github.com/cconroy20/fsps`
 
-FSPS is needed only to regenerate the compact table, not to run HaloMaker.
+The FSPS compact table is generated locally and is not redistributed with
+HaloMaker. Set `FSPS_PATH` when running `build.sh` for the first time. Once
+generated, FSPS itself is not needed at runtime.
 
 ## Redistribution Note
 
-FSPS source code is MIT licensed. BC03 and CB07 model tables have separate
-upstream terms and citations. Before publishing or redistributing this
-repository, the maintainer must confirm that distribution of the compact
-derived BC03 and CB07 tables is permitted by the model authors.
+FSPS source code is MIT licensed, but generated FSPS tables are intentionally
+excluded from this repository because their underlying stellar tracks and
+spectral libraries may have separate terms. BC03 and CB07 model tables also
+have separate upstream terms and citations. Before publishing or
+redistributing derived tables, confirm permission from the relevant model
+authors.

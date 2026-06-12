@@ -94,15 +94,41 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--partial", choices=("ab", "vega"))
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--fsps-path",
+        type=Path,
+        help="FSPS source/data installation (also accepted via FSPS_PATH or SPS_HOME)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="replace an existing compact table",
+    )
     args = parser.parse_args()
     if args.partial:
         generate_partial(args.partial, args.output)
         return
 
-    if "SPS_HOME" not in os.environ:
-        raise SystemExit("Set SPS_HOME to an FSPS source/data installation")
     root = Path(__file__).resolve().parents[1]
     output = root / "halomaker_data" / "ssp_tables" / "fsps.npz"
+    if output.exists() and not args.force:
+        print(f"Using existing {output}")
+        return
+
+    fsps_path = args.fsps_path
+    if fsps_path is None:
+        value = os.environ.get("FSPS_PATH") or os.environ.get("SPS_HOME")
+        fsps_path = Path(value) if value else None
+    if fsps_path is None:
+        raise SystemExit(
+            "Set FSPS_PATH or pass --fsps-path with an FSPS source/data installation"
+        )
+    fsps_path = fsps_path.expanduser().resolve()
+    if not fsps_path.is_dir():
+        raise SystemExit(f"FSPS source/data directory does not exist: {fsps_path}")
+    os.environ["SPS_HOME"] = str(fsps_path)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as temp_dir:
         temp = Path(temp_dir)
         for system in ("ab", "vega"):

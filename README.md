@@ -155,22 +155,32 @@ memory files owned by the current user.
 - `compute_adaptahop*.pyf`: explicit f2py interfaces for portable builds
 - `hdf_output_example.py`: simple HDF5 catalog reader example
 - `ssp_photometry.py`: compact SSP-table interpolation
-- `halomaker_data/ssp_tables`: bundled CB07, BC03, and FSPS runtime tables
+- `halomaker_data/ssp_tables`: SSP runtime tables; the FSPS table is generated locally
 - `clean_runtime.sh`: dry-run / cleanup helper for interrupted runs
 
-## Regenerating the FSPS table
+## Preparing the FSPS table
 
-FSPS is not required for normal HaloMaker runs. To regenerate the bundled FSPS
-table, install the optional dependency and configure an FSPS source/data tree:
+The FSPS compact table is not redistributed with HaloMaker. Install the
+optional generator dependency and point `FSPS_PATH` at an FSPS source/data
+installation before the first build:
 
 ```bash
 uv sync --extra ssp-generation
-export SPS_HOME=/path/to/fsps
-uv run python tools/generate_fsps_table.py
+FSPS_PATH=/path/to/fsps PYTHON=.venv/bin/python bash build.sh
 ```
 
-The FSPS source/data installation is intentionally separate because
-`python-fsps` alone does not provide the full model data.
+`build.sh` generates `halomaker_data/ssp_tables/fsps.npz` when it is missing
+and reuses it on later builds. The generated file is ignored by Git. The
+legacy `SPS_HOME` environment variable is also accepted. To regenerate the
+table explicitly:
+
+```bash
+uv run python tools/generate_fsps_table.py \
+    --fsps-path /path/to/fsps --force
+```
+
+The FSPS source/data installation remains separate because `python-fsps`
+alone does not provide the full model data.
 
 ## Release Checklist
 

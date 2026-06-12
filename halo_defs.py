@@ -253,6 +253,9 @@ halo_dtype = np.dtype([
         ('SFR10', 'f8'),('SFR10_r50', 'f8'),('SFR10_r90', 'f8'),
         ('spin', 'f8'),
         ('sigma', 'f8'),('sigma_dm', 'f8'),('sigma*', 'f8'),
+        ('vrot', 'f8'),('sig3d', 'f8'),('sigcyl', 'f8'),
+        ('vrot_r50', 'f8'),('sig3d_r50', 'f8'),('sigcyl_r50', 'f8'),
+        ('vrot_r90', 'f8'),('sig3d_r90', 'f8'),('sigcyl_r90', 'f8'),
         ('ek', 'f8'),('ep', 'f8'),('et', 'f8'),
         ('rvir','f8'),('mvir','f8'),('tvir','f8'),('cvel','f8'),
         ('rho_0','f8'),('r_c','f8'),('cNFW','f8'),('cNFWerr','f8'),
@@ -283,6 +286,9 @@ def clear_halo(h):
     h['SFR10'] = np.float64(0.0); h['SFR10_r50'] = np.float64(0.0); h['SFR10_r90'] = np.float64(0.0)
     h['spin'] = np.float64(0.0)
     h['sigma'] = np.float64(0.0); h['sigma_dm'] = np.float64(0.0); h['sigma*'] = np.float64(0.0)
+    h['vrot'] = np.float64(np.nan); h['sig3d'] = np.float64(np.nan); h['sigcyl'] = np.float64(np.nan)
+    h['vrot_r50'] = np.float64(np.nan); h['sig3d_r50'] = np.float64(np.nan); h['sigcyl_r50'] = np.float64(np.nan)
+    h['vrot_r90'] = np.float64(np.nan); h['sig3d_r90'] = np.float64(np.nan); h['sigcyl_r90'] = np.float64(np.nan)
     h['ek'] = np.float64(0.0); h['ep'] = np.float64(0.0); h['et'] = np.float64(0.0)
     h['rvir'] = np.float64(0.0); h['mvir'] = np.float64(0.0); h['tvir'] = np.float64(0.0); h['cvel'] = np.float64(0.0)
     h['rho_0'] = np.float64(0.0); h['r_c'] = np.float64(0.0); h['cNFW'] = np.float64(np.nan); h['cNFWerr'] = np.float64(np.nan)

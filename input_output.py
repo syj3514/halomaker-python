@@ -1,7 +1,7 @@
 from halo_defs import mem, frange
 import halo_defs as H
 import numpy as np
-import atexit, signal, sys
+import atexit, os, signal, sys
 from scipy.io import FortranFile
 from tqdm import tqdm
 # from multiprocessing import Pool
@@ -101,6 +101,7 @@ def read_data_10():
             if(H.allocated('id_10')): H.deallocate('id_10')
             if(H.allocated('age_10')): H.deallocate('age_10')
             if(H.allocated('metal_10')): H.deallocate('metal_10')
+            if(H.allocated('m0_10')): H.deallocate('m0_10')
             if(len(H.liste_halos_o0)>0): H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
             return
     
@@ -250,6 +251,37 @@ def read_ramses_100(repository):
             print(f"> particle mass (in M_sun) after renorm  = {massres}")
         if(H.BIG_RUN):
             H.deallocate('mass_10')
+
+
+def _ra4_initial_mass_skip(repository):
+    descriptor = os.path.join(repository, "part_file_descriptor.txt")
+    if not os.path.exists(descriptor):
+        return None
+
+    fields = []
+    with open(descriptor, "r") as stream:
+        for line in stream:
+            if line.lstrip().startswith("#"):
+                continue
+            columns = [column.strip() for column in line.split(",")]
+            if len(columns) >= 2:
+                fields.append(columns[1])
+
+    if "initial_mass" not in fields:
+        return None
+    if "metallicity" not in fields:
+        raise RuntimeError(
+            f"Ra4 descriptor has initial_mass but no metallicity: {descriptor}"
+        )
+    metal_index = fields.index("metallicity")
+    initial_mass_index = fields.index("initial_mass")
+    if initial_mass_index <= metal_index:
+        raise RuntimeError(
+            f"Unsupported Ra4 initial_mass record order: {descriptor}"
+        )
+    return initial_mass_index - metal_index - 1
+
+
 #***********************************************************************
 def _read_ramses_new_1010(icpu, kwargs):
     repository = kwargs['repository']
@@ -294,6 +326,7 @@ def _read_ramses_new_1010(icpu, kwargs):
         skip_records(f, 1)
         tmpt = None
         tmpmetal = None
+        tmpm0 = None
         if(rver=='Ra4'):
             # read particle family
             fam = f.read_ints(dtype=np.int8)
@@ -304,6 +337,9 @@ def _read_ramses_new_1010(icpu, kwargs):
                 tmpt = f.read_reals()
             if not dmcount:
                 tmpmetal = f.read_reals()
+                if kwargs['m0_skip'] is not None:
+                    skip_records(f, kwargs['m0_skip'])
+                    tmpm0 = f.read_reals()
             elif rver != 'Ra4':
                 skip_records(f, 1)
     # now sort DM particles in ascending id order and get rid of stars
@@ -343,6 +379,8 @@ def _read_ramses_new_1010(icpu, kwargs):
             age_10[star_slots] = (
                 kwargs['snapshot_age'] - H.epoch_to_age(tmpt[starmask]))
             metal_10[star_slots] = tmpmetal[starmask]
+            if tmpm0 is not None:
+                H.maccess('m0_10')[star_slots] = tmpm0[starmask]
     return npart_tmp
 #***********************************************************************
 import time
@@ -359,6 +397,8 @@ def read_ramses_new_101(repository, rver='Ra3'):
     if(H.verbose): print(f"\t------------------------------------------------------------------")
     if(H.verbose): print(f"\t| Reading RAMSES version {rver}  ")
     if(H.verbose): print(f"\t------------------------------------------------------------------")
+    m0_skip = _ra4_initial_mass_skip(repository) if rver == 'Ra4' else None
+
     # read cosmological params in header of amr file
     ipos    = repository.find("output_")
     nchar   = repository[ipos+7:ipos+12]
@@ -458,7 +498,8 @@ def read_ramses_new_101(repository, rver='Ra3'):
     kwargs = {
         'repository':repository, 'rver':rver, 'nchar':nchar,
         'ndim':H.ndim, 'scale_l':scale_l, 'scale_t':scale_t,
-        'snapshot_age':snapshot_age, 'dmcount':True}
+        'snapshot_age':snapshot_age, 'dmcount':True,
+        'm0_skip':m0_skip}
     iterobj = range(1,H.ncpu+1)
     if(H.nbPes==1): # Sequential reading
         if(H.TQDM)and(H.megaverbose): pbar = tqdm(total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", file=sys.stdout, disable=(not H.megaverbose), ncols=100)
@@ -491,6 +532,9 @@ def read_ramses_new_101(repository, rver='Ra3'):
         H.allocate('metal_10', (H.nstar,), dtype=np.float64)
         mem['age_10'][:] = np.nan
         mem['metal_10'][:] = np.nan
+        if m0_skip is not None:
+            H.allocate('m0_10', (H.nstar,), dtype=np.float64)
+            mem['m0_10'][:] = np.nan
     # Read all parts
     kwargs['dmcount'] = False
     iterobj = range(1,H.ncpu+1)
@@ -522,15 +566,23 @@ def read_ramses_new_101(repository, rver='Ra3'):
     if H.nstar > 0:
         n_age = np.sum(np.isfinite(mem['age_10']))
         n_metal = np.sum(np.isfinite(mem['metal_10']))
-        if n_age != H.nstar or n_metal != H.nstar:
+        n_m0 = (
+            np.sum(np.isfinite(mem['m0_10']) & (mem['m0_10'] > 0))
+            if H.allocated('m0_10') else H.nstar
+        )
+        if n_age != H.nstar or n_metal != H.nstar or n_m0 != H.nstar:
             raise RuntimeError(
                 f"Incomplete stellar properties: age={n_age}, metal={n_metal}, "
+                f"m0={n_m0}, "
                 f"expected={H.nstar}")
     if(H.verbose and H.nstar > 0):
         print(f"\t|> Stellar age range (Gyr)          = "
               f"{np.min(mem['age_10']):.6g} .. {np.max(mem['age_10']):.6g}")
         print(f"\t|> Stellar metallicity range        = "
               f"{np.min(mem['metal_10']):.6g} .. {np.max(mem['metal_10']):.6g}")
+        if H.allocated('m0_10'):
+            print(f"\t|> Stellar initial-mass range        = "
+                  f"{np.min(mem['m0_10']):.6g} .. {np.max(mem['m0_10']):.6g}")
     H.allocate('pos_10', (H.npart, H.ndim), dtype=np.float64)
     H.allocate('vel_10', (H.npart, H.ndim), dtype=np.float64)
     H.allocate('mass_10', (H.npart,), dtype=np.float64)
@@ -808,7 +860,10 @@ def write_tree_brick_hdf():
             model_group = photometry.create_group(model)
             for key, value in metadata.items():
                 model_group.attrs[key] = value
-            model_group.attrs['mass_source'] = 'current_mass_fallback'
+            model_group.attrs['mass_source'] = (
+                'initial_mass' if H.allocated('m0_10')
+                else 'current_mass_fallback'
+            )
             model_group.attrs['interpolation'] = 'bilinear in log-age/log-metallicity, magnitude space'
             model_group.attrs['frame'] = 'intrinsic rest-frame'
             model_group.attrs['dust'] = False
