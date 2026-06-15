@@ -8,7 +8,10 @@ __pycache__/
 .venv/
 uv.lock
 .python-version
+halomaker_data/ssp_tables/bc03.npz
+halomaker_data/ssp_tables/cb07.npz
 halomaker_data/ssp_tables/fsps.npz
+meeting_room/
 patch/*/
 !patch/README.md
 ncontam_halos*.dat
