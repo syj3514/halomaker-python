@@ -148,7 +148,9 @@ shared memory file을 제거합니다.
 ## SSP table 준비
 
 BC03, CB07, FSPS compact table은 HaloMaker와 함께 재배포하지 않습니다.
-첫 build 전에 원본 model data 경로를 지정해야 합니다.
+첫 build 전에 원본 model data 경로를 지정해야 합니다. Local development
+copy가 있는 경우 표준 위치는 Git에서 제외되는 `assets/ssp_originals/bc03` 및
+`assets/ssp_originals/cb07`입니다. 명시적 경로가 이 기본값보다 우선합니다.
 
 - `BC03_PATH`: BC03 Chabrier/Padova 1994 source tarball 또는 extracted directory
 - `CB07_PATH`: RUR에서 사용한 CB07 source-table directory
@@ -168,7 +170,16 @@ PYTHON=.venv/bin/python bash build.sh
 ```
 
 `build.sh`는 없는 table만 `halomaker_data/ssp_tables/` 아래에 생성하고,
-이후 build에서는 기존 파일을 재사용합니다. 생성된 npz 파일은 Git에서 제외됩니다.
+이후 build에서는 기존 파일을 재사용한 뒤 Fortran extension을 compile합니다.
+SSP table 준비 로직은 `tools/prepare_ssp_tables.sh`에 분리되어 있습니다.
+생성된 npz 파일은 Git에서 제외됩니다. SSP table만 준비하거나 다시 만들려면
+다음처럼 실행합니다.
+
+```bash
+PYTHON=.venv/bin/python bash tools/prepare_ssp_tables.sh
+HALOMAKER_TABLES_ONLY=1 PYTHON=.venv/bin/python bash build.sh
+```
+
 개별 table을 명시적으로 다시 만들려면 다음처럼 실행합니다.
 
 ```bash

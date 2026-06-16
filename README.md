@@ -161,7 +161,9 @@ memory files owned by the current user.
 ## Preparing SSP tables
 
 The compact BC03, CB07, and FSPS tables are not redistributed with HaloMaker.
-Provide the source model data before the first build:
+Provide the source model data before the first build. Local development copies,
+when present, use the standard ignored locations `assets/ssp_originals/bc03`
+and `assets/ssp_originals/cb07`. Explicit paths override those defaults:
 
 - `BC03_PATH`: BC03 Chabrier/Padova 1994 source tarball or extracted directory
 - `CB07_PATH`: CB07 source-table directory used by RUR
@@ -180,9 +182,17 @@ FSPS_PATH=/path/to/fsps \
 PYTHON=.venv/bin/python bash build.sh
 ```
 
-`build.sh` generates missing tables under `halomaker_data/ssp_tables/` and
-reuses existing files on later builds. The generated files are ignored by Git.
-To regenerate tables explicitly:
+`build.sh` calls `tools/prepare_ssp_tables.sh` to generate missing tables
+under `halomaker_data/ssp_tables/`, then compiles the Fortran extensions. It
+reuses existing table files on later builds. The generated files are ignored by
+Git. To prepare or regenerate only the SSP tables:
+
+```bash
+PYTHON=.venv/bin/python bash tools/prepare_ssp_tables.sh
+HALOMAKER_TABLES_ONLY=1 PYTHON=.venv/bin/python bash build.sh
+```
+
+To regenerate individual tables explicitly:
 
 ```bash
 uv run python tools/generate_bc03_table.py \

@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 from pathlib import Path
 
 import numpy as np
@@ -9,8 +10,8 @@ FIELDS = (
     "umag", "gmag", "rmag", "imag", "zmag",
     "Umag", "Bmag", "Vmag", "Kmag",
 )
-METALLICITIES = (0.0001, 0.0004, 0.004, 0.008, 0.02, 0.05, 0.1)
-TAGS = (22, 32, 42, 52, 62, 72, 82)
+SOURCE_PATTERN = re.compile(r"^cb2007_lr_BaSeL_m(?P<tag>\d+)_chab_ssp\.1ABmag$")
+METALLICITY_PATTERN = re.compile(r"\bZ\s*=\s*([0-9.eE+-]+)")
 
 
 def _read_table(path):
@@ -20,47 +21,62 @@ def _read_table(path):
     return np.genfromtxt(path, names=names, skip_header=header)
 
 
-def _required_files(source_dir):
-    files = []
-    for tag in TAGS:
-        stem = source_dir / f"cb2007_lr_BaSeL_m{tag}_chab_ssp"
-        files.append(stem.with_suffix(".1ABmag"))
-        files.append(stem.with_suffix(".1color"))
-    return files
+def _read_metallicity(path):
+    with path.open() as handle:
+        for line in handle:
+            match = METALLICITY_PATTERN.search(line)
+            if match:
+                return float(match.group(1))
+    raise ValueError(f"Could not find metallicity Z=... in {path}")
+
+
+def _discover_sources(source_dir):
+    if not source_dir.is_dir():
+        return []
+    pairs = []
+    for ab_path in source_dir.glob("cb2007_lr_BaSeL_m*_chab_ssp.1ABmag"):
+        match = SOURCE_PATTERN.match(ab_path.name)
+        if not match:
+            continue
+        tag = int(match.group("tag"))
+        color_path = ab_path.with_suffix(".1color")
+        if not color_path.is_file():
+            raise SystemExit(f"Missing CB07 color table for {ab_path}: {color_path}")
+        pairs.append((tag, _read_metallicity(ab_path), ab_path, color_path))
+    return sorted(pairs, key=lambda item: item[0])
 
 
 def _find_source_dir(source):
     source = source.expanduser().resolve()
     candidates = [source, source / "cb07"]
     for candidate in candidates:
-        missing = [path for path in _required_files(candidate) if not path.is_file()]
-        if not missing:
+        if _discover_sources(candidate):
             return candidate
-    missing_text = "\n".join(str(path) for path in missing[:6])
-    if len(missing) > 6:
-        missing_text += f"\n... and {len(missing) - 6} more"
     raise SystemExit(
-        "CB07 source files were not found. Expected 14 files named "
-        "cb2007_lr_BaSeL_m{22,32,42,52,62,72,82}_chab_ssp.{1ABmag,1color}. "
-        f"Missing examples:\n{missing_text}"
+        "CB07 source files were not found. Expected pairs named "
+        "cb2007_lr_BaSeL_m*_chab_ssp.{1ABmag,1color} under "
+        f"{source} or {source / 'cb07'}"
     )
 
 
 def _build_grid(source_dir):
     grids = []
     age_grid = None
-    for tag in TAGS:
-        stem = source_dir / f"cb2007_lr_BaSeL_m{tag}_chab_ssp"
-        ab = _read_table(stem.with_suffix(".1ABmag"))
-        colors = _read_table(stem.with_suffix(".1color"))
+    metallicities = []
+    sources = _discover_sources(source_dir)
+    if not sources:
+        raise SystemExit(f"No CB07 source table pairs found in {source_dir}")
+    for tag, metallicity, ab_path, color_path in sources:
+        ab = _read_table(ab_path)
+        colors = _read_table(color_path)
 
         if len(ab) != len(colors):
-            raise ValueError(f"Row count mismatch for {stem}")
+            raise ValueError(f"Row count mismatch for {ab_path} and {color_path}")
         current_age = np.asarray(ab["logageyr"], dtype=np.float64)
         if age_grid is None:
             age_grid = current_age
         elif not np.array_equal(age_grid, current_age):
-            raise ValueError(f"Age grid mismatch for {stem}")
+            raise ValueError(f"Age grid mismatch for CB07 metallicity tag {tag}")
 
         values = np.column_stack(
             (
@@ -75,18 +91,23 @@ def _build_grid(source_dir):
                 colors["Kmag"],
             )
         )
+        metallicities.append(metallicity)
         grids.append(values)
-    return age_grid, np.asarray(grids, dtype=np.float64)
+    return (
+        age_grid,
+        np.asarray(metallicities, dtype=np.float64),
+        np.asarray(grids, dtype=np.float64),
+    )
 
 
 def generate(source, output):
     source_dir = _find_source_dir(source)
-    log_age, magnitudes = _build_grid(source_dir)
+    log_age, metallicities, magnitudes = _build_grid(source_dir)
     output.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         output,
         log_age=log_age,
-        metallicity=np.asarray(METALLICITIES, dtype=np.float64),
+        metallicity=metallicities,
         field_names=np.asarray(FIELDS),
         magnitudes=magnitudes,
         meta_model=np.asarray("Charlot & Bruzual 2007"),
@@ -105,7 +126,10 @@ def main():
     parser.add_argument(
         "--cb07-path",
         type=Path,
-        help="CB07 source directory (also accepted via CB07_PATH)",
+        help=(
+            "CB07 source directory "
+            "(priority: CLI > CB07_PATH > assets/ssp_originals/cb07)"
+        ),
     )
     parser.add_argument(
         "--output",
@@ -128,9 +152,7 @@ def main():
     source = args.cb07_path
     if source is None:
         value = os.environ.get("CB07_PATH")
-        source = Path(value) if value else None
-    if source is None:
-        raise SystemExit("Set CB07_PATH or pass --cb07-path with a CB07 source directory")
+        source = Path(value) if value else root / "assets" / "ssp_originals" / "cb07"
     if not source.expanduser().is_dir():
         raise SystemExit(f"CB07 source directory does not exist: {source}")
 

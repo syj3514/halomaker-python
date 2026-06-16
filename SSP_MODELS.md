@@ -32,9 +32,10 @@ choice is recorded as `mass_source=initial_mass` or
 - `Kmag`: Johnson K, Vega
 
 The compact runtime table is generated at build time from the CB07 source
-tables used by RUR. Set `CB07_PATH` to that local source-table directory before
-the first build. The CB07 source tables and generated compact table are not
-redistributed with HaloMaker.
+tables used by RUR. The standard local source location is
+`assets/ssp_originals/cb07` when available; set `CB07_PATH` to override it.
+The CB07 source tables and generated compact table are not redistributed with
+HaloMaker.
 
 ## BC03
 
@@ -50,9 +51,10 @@ Source:
 `https://www.bruzual.org/bc03/Original_version_2003/`
 
 The compact runtime table is generated at build time from the BC03
-Chabrier/Padova 1994 source tarball or extracted directory. Set `BC03_PATH`
-before the first build. The BC03 source tables and generated compact table are
-not redistributed with HaloMaker.
+Chabrier/Padova 1994 source tarball or extracted directory. The standard local
+source location is `assets/ssp_originals/bc03` when available; set `BC03_PATH`
+to override it. The BC03 source tables and generated compact table are not
+redistributed with HaloMaker.
 
 ## FSPS
 
