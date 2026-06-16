@@ -31,7 +31,10 @@ choice is recorded as `mass_source=initial_mass` or
 - Ages: 220
 - `Kmag`: Johnson K, Vega
 
-The compact runtime table was generated from the CB07 tables used by RUR.
+The compact runtime table is generated at build time from the CB07 source
+tables used by RUR. Set `CB07_PATH` to that local source-table directory before
+the first build. The CB07 source tables and generated compact table are not
+redistributed with HaloMaker.
 
 ## BC03
 
@@ -45,6 +48,11 @@ The compact runtime table was generated from the CB07 tables used by RUR.
 
 Source:
 `https://www.bruzual.org/bc03/Original_version_2003/`
+
+The compact runtime table is generated at build time from the BC03
+Chabrier/Padova 1994 source tarball or extracted directory. Set `BC03_PATH`
+before the first build. The BC03 source tables and generated compact table are
+not redistributed with HaloMaker.
 
 ## FSPS
 
@@ -60,15 +68,13 @@ Source:
 
 Source: `https://github.com/cconroy20/fsps`
 
-The FSPS compact table is generated locally and is not redistributed with
-HaloMaker. Set `FSPS_PATH` when running `build.sh` for the first time. Once
-generated, FSPS itself is not needed at runtime.
+The FSPS compact table is generated locally at build time and is not
+redistributed with HaloMaker. Set `FSPS_PATH` when running `build.sh` for the
+first time. Once generated, FSPS itself is not needed at runtime.
 
 ## Redistribution Note
 
-FSPS source code is MIT licensed, but generated FSPS tables are intentionally
-excluded from this repository because their underlying stellar tracks and
-spectral libraries may have separate terms. BC03 and CB07 model tables also
-have separate upstream terms and citations. Before publishing or
-redistributing derived tables, confirm permission from the relevant model
-authors.
+Generated BC03, CB07, and FSPS compact tables are intentionally excluded from
+this repository because their upstream model data have separate distribution
+terms. Before publishing or redistributing derived tables, confirm permission
+from the relevant model authors.

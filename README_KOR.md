@@ -141,7 +141,44 @@ shared memory file을 제거합니다.
 - `compute_adaptahop_zoomin.f90`: optimized zoom-in AdaptaHOP extension
 - `compute_adaptahop*.pyf`: portable build를 위한 explicit f2py interface
 - `hdf_output_example.py`: 간단한 HDF5 catalog reader example
+- `ssp_photometry.py`: compact SSP table interpolation
+- `halomaker_data/ssp_tables`: build 시 생성되는 SSP runtime table; Git에서 제외
 - `clean_runtime.sh`: interrupted run을 위한 dry-run / cleanup helper
+
+## SSP table 준비
+
+BC03, CB07, FSPS compact table은 HaloMaker와 함께 재배포하지 않습니다.
+첫 build 전에 원본 model data 경로를 지정해야 합니다.
+
+- `BC03_PATH`: BC03 Chabrier/Padova 1994 source tarball 또는 extracted directory
+- `CB07_PATH`: RUR에서 사용한 CB07 source-table directory
+- `FSPS_PATH`: FSPS source/data installation (`SPS_HOME`도 허용)
+
+BC03 원본은 Bruzual & Charlot 2003 original release page에서 받을 수 있습니다.
+`https://www.bruzual.org/bc03/Original_version_2003/`
+
+FSPS를 생성하려면 optional generator dependency가 필요합니다.
+
+```bash
+uv sync --extra ssp-generation
+BC03_PATH=/path/to/bc03 \
+CB07_PATH=/path/to/cb07 \
+FSPS_PATH=/path/to/fsps \
+PYTHON=.venv/bin/python bash build.sh
+```
+
+`build.sh`는 없는 table만 `halomaker_data/ssp_tables/` 아래에 생성하고,
+이후 build에서는 기존 파일을 재사용합니다. 생성된 npz 파일은 Git에서 제외됩니다.
+개별 table을 명시적으로 다시 만들려면 다음처럼 실행합니다.
+
+```bash
+uv run python tools/generate_bc03_table.py \
+    --bc03-path /path/to/bc03 --force
+uv run python tools/generate_cb07_table.py \
+    --cb07-path /path/to/cb07 --force
+uv run python tools/generate_fsps_table.py \
+    --fsps-path /path/to/fsps --force
+```
 
 ## Release Checklist
 

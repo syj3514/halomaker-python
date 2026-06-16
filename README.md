@@ -155,32 +155,47 @@ memory files owned by the current user.
 - `compute_adaptahop*.pyf`: explicit f2py interfaces for portable builds
 - `hdf_output_example.py`: simple HDF5 catalog reader example
 - `ssp_photometry.py`: compact SSP-table interpolation
-- `halomaker_data/ssp_tables`: SSP runtime tables; the FSPS table is generated locally
+- `halomaker_data/ssp_tables`: generated SSP runtime tables; ignored by Git
 - `clean_runtime.sh`: dry-run / cleanup helper for interrupted runs
 
-## Preparing the FSPS table
+## Preparing SSP tables
 
-The FSPS compact table is not redistributed with HaloMaker. Install the
-optional generator dependency and point `FSPS_PATH` at an FSPS source/data
-installation before the first build:
+The compact BC03, CB07, and FSPS tables are not redistributed with HaloMaker.
+Provide the source model data before the first build:
+
+- `BC03_PATH`: BC03 Chabrier/Padova 1994 source tarball or extracted directory
+- `CB07_PATH`: CB07 source-table directory used by RUR
+- `FSPS_PATH`: FSPS source/data installation (`SPS_HOME` is also accepted)
+
+BC03 can be obtained from the Bruzual & Charlot 2003 original release page:
+`https://www.bruzual.org/bc03/Original_version_2003/`
+
+Install the optional FSPS generator dependency when generating FSPS:
 
 ```bash
 uv sync --extra ssp-generation
-FSPS_PATH=/path/to/fsps PYTHON=.venv/bin/python bash build.sh
+BC03_PATH=/path/to/bc03 \
+CB07_PATH=/path/to/cb07 \
+FSPS_PATH=/path/to/fsps \
+PYTHON=.venv/bin/python bash build.sh
 ```
 
-`build.sh` generates `halomaker_data/ssp_tables/fsps.npz` when it is missing
-and reuses it on later builds. The generated file is ignored by Git. The
-legacy `SPS_HOME` environment variable is also accepted. To regenerate the
-table explicitly:
+`build.sh` generates missing tables under `halomaker_data/ssp_tables/` and
+reuses existing files on later builds. The generated files are ignored by Git.
+To regenerate tables explicitly:
 
 ```bash
+uv run python tools/generate_bc03_table.py \
+    --bc03-path /path/to/bc03 --force
+uv run python tools/generate_cb07_table.py \
+    --cb07-path /path/to/cb07 --force
 uv run python tools/generate_fsps_table.py \
     --fsps-path /path/to/fsps --force
 ```
 
 The FSPS source/data installation remains separate because `python-fsps`
-alone does not provide the full model data.
+alone does not provide the full model data. The BC03 and CB07 source tables
+also remain separate because they have their own upstream distribution terms.
 
 ## Release Checklist
 
