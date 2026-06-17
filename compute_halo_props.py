@@ -920,16 +920,15 @@ def correct_for_periodicity(dr:vector, copy=False):
         if (dr.z < - H.Lbox_pt2): dr.z = dr.z + H.Lbox_pt 
 
 def correct_for_periodicity_1d(dr:np.ndarray, copy=False):
-    if (H.FlagPeriod == 0): return dr #--> NO PERIODIC BCs 
-    
-    if(copy):
-        temp = np.where(dr > + H.Lbox_pt2, dr - H.Lbox_pt, dr)
-        temp = np.where(temp < - H.Lbox_pt2, temp + H.Lbox_pt, temp)
-        return temp
-    else:
-        dr = np.where(dr > + H.Lbox_pt2, dr - H.Lbox_pt, dr)
-        dr = np.where(dr < - H.Lbox_pt2, dr + H.Lbox_pt, dr)
-        return dr
+    if (H.FlagPeriod == 0): return dr #--> NO PERIODIC BCs
+
+    # In-place masked correction (avoids the full-size temporaries that two
+    # np.where calls allocate). copy=False mutates the passed array; all callers
+    # pass throwaway deltas such as (ipos[:,0] - h['px']), so this is safe.
+    out = dr.copy() if copy else dr
+    out[out > + H.Lbox_pt2] -= H.Lbox_pt
+    out[out < - H.Lbox_pt2] += H.Lbox_pt
+    return out
 
 
 #***********************************************************************                
