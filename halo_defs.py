@@ -365,13 +365,6 @@ profile = 'TSIS' # type of halo profile (only isothermal_sphere yet)
 ninterp = 1 # nb of bins for interp. of smoothed grav. field
 FlagPeriod = 1 # flag for periodicity of boundary conditions
 fPeriod = np.array([1.0, 1.0, 1.0], dtype=np.float64)
-zoomin = False # flag for zoom-in simulation
-# Manual Zoombox
-# [x1,x2,y1,y2,z1,z2] code unit centered on 0. 
-    # ex: np.array([-0.5,0.5,-0.5,0.5,-0.5,0.5])
-# Or, you can override in the command
-#   `--zoombox [-0.310,-0.290,-0.150,-0.110,-0.010,0.010]`
-zoombox = None # 
 #----------- For gadget format: ----------------------------------------
 # nhr = 1 # to read only the selected HR particles
 # minlrmrat = 1.0 # to recognize contaminated halos
@@ -565,15 +558,6 @@ def fbool(value):
 def chmod(value):
     return int(f"0o{int(value)}", 8)
 
-def getzoombox(values):
-    str_to_parse = str(values).strip()
-    if str_to_parse.startswith('[') and str_to_parse.endswith(']'):
-        str_to_parse = str_to_parse[1:-1]
-    values = [float(v.strip()) for v in str_to_parse.split(',')]
-    if len(values) != 6:
-        raise ValueError(f"Expected 6 values for zoombox, got {len(values)}: {values}")
-    return np.array([*values])
-
 PARAMS = {
     # name in H        aliases in input file / CLI                 type
     'omega_f':        (['omega_0', 'Omega_0', 'omega_f'],          np.float64),
@@ -611,10 +595,10 @@ PARAMS = {
     'uid':            (['uid'],                                    int),
     'gid':            (['gid'],                                    int),
 
-    'zoomin':         (['zoomin'],                                 fbool),
     'prefix':         (['prefix'],                                 str),
-    'zoombox':         (['zoombox'],                               getzoombox),
 }
+
+IGNORED_INPUT_KEYS = {'zoomin', 'zoombox'}
 
 
 ALIAS_TO_ATTR = {

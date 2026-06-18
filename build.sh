@@ -25,7 +25,7 @@ fi
 
 cd "$BUILD_DIR"
 
-for source in compute_adaptahop.f90 compute_adaptahop_zoomin.f90; do
+for source in compute_adaptahop.f90; do
     module="${source%.f90}"
     source_path="$BUILD_DIR/$source"
     interface_path="$BUILD_DIR/${module}.pyf"

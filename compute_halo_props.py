@@ -169,14 +169,9 @@ def init_cosmo_01():
     #         H.uid = int(value)
     #     elif (name == 'gid'):
     #         H.gid = int(value)
-    #     elif (name == 'zoomin'):
-    #         H.zoomin = value=='.true.'
     #     else:
     #         print(f'dont recognise parameter: {name}')
     # f20.close()
-
-    # if (H.zoomin):
-    #     H.FlagPeriod = 0
 
     # ==========================================================
     # ==========================================================
@@ -212,6 +207,8 @@ def init_cosmo_01():
         elif name[0] in ["#", "!"]:
             pass
 
+        elif name in H.IGNORED_INPUT_KEYS:
+            pass
         else:
             print(f'dont recognise parameter: {name}')
 
@@ -241,10 +238,6 @@ def init_cosmo_01():
             print(f'[override] H.{attr} = {value}')
 
 
-    # dependent rule
-    if getattr(H, 'zoomin', False):
-        H.FlagPeriod = np.int32(0)
-        print('[postprocess] H.zoomin=True -> H.FlagPeriod=0')
     header_keys = ('omega_f', 'omega_lambda_f', 'Lf')
     missing_header_values = [key for key in header_keys if not cosmo_given[key]]
     if missing_header_values:
@@ -369,7 +362,6 @@ def new_step_1():
         if(H.allocated('vel_10')): H.deallocate('vel_10')
         if(H.allocated('mass_10')): H.deallocate('mass_10')
         if(H.allocated('whereIam_parts')): H.deallocate('whereIam_parts')
-        if(H.allocated('refmask_10')): H.deallocate('refmask_10')
         if(H.allocated('id_10')): H.deallocate('id_10')
         if(H.allocated('age_10')): H.deallocate('age_10')
         if(H.allocated('metal_10')): H.deallocate('metal_10')
@@ -591,7 +583,6 @@ def new_step_1():
         H.deallocate(f'photometry_{model.lower()}')
     # H.deallocate('nb_of_parts_o0_1','first_part_oo_1','linked_list_oo_1')
     H.deallocate('pos_10','vel_10')
-    if H.allocated('refmask_10'): H.deallocate('refmask_10')
     H.deallocate('whereIam_idxs','whereIam_counts','pids0_groupsorted')
     if(H.allocated('mass_10')): H.deallocate('mass_10')
     if(H.allocated('age_10')): H.deallocate('age_10')
@@ -622,10 +613,7 @@ def make_halos_13():
 
     print('> In routine make_halos ')
     print('> ----------------------')
-    if H.zoomin:
-        print(f"> npart={H.npart} (in zoom, {np.sum(mem['refmask_10'])})")
-    else:
-        print(f"> npart={H.npart}")
+    print(f"> npart={H.npart}")
     
     print( )
     print( '_______________________________________________________________________'  )

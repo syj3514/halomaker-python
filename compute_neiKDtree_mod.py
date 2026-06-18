@@ -38,11 +38,7 @@ if H.FORTRAN:
     # import create_nodes
     # from create_nodes import neikdtree
     # from create_nodes import fhalo_defs as fH
-    if H.zoomin:
-        from compute_adaptahop_zoomin import neikdtree
-        # from compute_adaptahop_test import neikdtree # <------ THIS TEST!!
-    else:
-        from compute_adaptahop import neikdtree
+    from compute_adaptahop import neikdtree
 
 #=======================================================================
 def compute_adaptahop_131():
@@ -53,18 +49,10 @@ def compute_adaptahop_131():
     timerecords.append(('    change_pos', -time.time()+ref)); ref = time.time()
     if H.FORTRAN:
         sync_fortran()
-        refmask = mem['refmask_10'] if H.zoomin else np.empty(1, dtype=np.bool_)
-        if H.zoomin:
-            if(H.megaverbose): print(f'{print_prefix}Go into Fortran for zoom-in...')
-            neikdtree.compute_adaptahop(
-                np.asfortranarray(mem['pos_10'].T),
-                np.asfortranarray(mem['mass_10']),
-                np.asfortranarray(refmask), np.asfortranarray(H.zoombox))
-        else:
-            if(H.megaverbose): print(f'{print_prefix}Go into Fortran for full-box...')
-            neikdtree.compute_adaptahop(
-                np.asfortranarray(mem['pos_10'].T),
-                np.asfortranarray(mem['mass_10']))
+        if(H.megaverbose): print(f'{print_prefix}Go into Fortran for full-box...')
+        neikdtree.compute_adaptahop(
+            np.asfortranarray(mem['pos_10'].T),
+            np.asfortranarray(mem['mass_10']))
         timerecords.append(('    compute_adaptahop', -time.time()+ref)); ref = time.time()
         
         H.allocate('density_1312',H.npart, dtype=np.float64)
@@ -199,7 +187,7 @@ def init_adaptahop_130():
     if H.FORTRAN:
         neikdtree.sync_from_init_adaptahop(
             # i4
-            H.npart,H.nmembthresh,H.nMembers, np.float32(H.zoomin),
+            H.npart,H.nmembthresh,H.nMembers, np.float32(0.0),
             # f8
             H.omegaL, H.omega_lambda_f, 
             H.omega0, H.omega_f, 
@@ -220,8 +208,6 @@ def change_pos_1310():
     H.epsilon  = H.fudgepsilon*H.xlong/H.npart**(1/3)
     if(H.SCIPY)and(not H.FORTRAN): mem['pos_10'] += 0.5
     mem['pos_10']      *= H.boxsize2
-    if H.zoomin:
-        H.zoombox *= H.boxsize2
     if H.FORTRAN:
         neikdtree.sync_from_change_pos(
             H.npart, H.nusedpart, # i4
@@ -233,8 +219,6 @@ def change_pos_1310():
 def change_pos_back_1315():
 #=======================================================================
     mem['pos_10'] /= H.boxsize2
-    if H.zoomin:
-        H.zoombox /= H.boxsize2
     if H.SCIPY: mem['pos_10'] -= 0.5
 
 #=======================================================================

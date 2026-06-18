@@ -83,39 +83,10 @@ def read_data_10():
     elif(H.simtype=='Gd'): raise NotImplementedError("`Gd` format is not implemented yet")
     else: raise NotImplementedError(f"> Don''t know the snapshot format: `{H.simtype}`")
 
-    if(H.zoomin):
-        refmask = mem['refmask_10']
-        if np.sum(refmask) < H.nMembers:
-            H.nusedpart = np.sum(refmask)
-            print()
-            print('ERROR in this snapshot:')
-            print('> nusedpart=',H.nusedpart)
-            print('> nMembers=',H.nMembers)
-            print('> nusedpart < nMembers_threshold !')
-            print('> Skip this step')
-            if(H.allocated('pos_10')): H.deallocate('pos_10')
-            if(H.allocated('vel_10')): H.deallocate('vel_10')
-            if(H.allocated('mass_10')): H.deallocate('mass_10')
-            if(H.allocated('whereIam_parts')): H.deallocate('whereIam_parts')
-            if(H.allocated('refmask_10')): H.deallocate('refmask_10')
-            if(H.allocated('id_10')): H.deallocate('id_10')
-            if(H.allocated('age_10')): H.deallocate('age_10')
-            if(H.allocated('metal_10')): H.deallocate('metal_10')
-            if(H.allocated('m0_10')): H.deallocate('m0_10')
-            if(len(H.liste_halos_o0)>0): H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
-            return
-    
     pos = mem['pos_10']
     print(f"> min max position (in box units)   : {np.min(pos)},{np.max(pos)}")
-    if H.zoomin:
-        # refmask = mem['refmask_10']
-        rpos = pos[refmask]
-        print(f">                  (zoom-in)        : {np.min(rpos)},{np.max(rpos)}")
     vel = mem['vel_10']
     print(f"> min max velocities (in km/s)      : {np.min(vel)},{np.max(vel)}")
-    if H.zoomin:
-        rvel = vel[refmask]
-        print(f">                    (zoom-in)      : {np.min(rvel)},{np.max(rvel)}")
     print(f"> Reading done.")
     print(f"> aexp = {H.aexp}")
 
@@ -608,29 +579,6 @@ def read_ramses_new_101(repository, rver='Ra3'):
     if(H.BIG_RUN):
         H.deallocate('mass_10')
 
-    if (H.zoomin):
-        # TODO: Reduce pos, vel, mass, id arrays to zoom-in region to save memory and speed up subsequent computations?
-        if(H.verbose): print(f"\t|> Applying zoom-in mask to particles...")
-        H.allocate('refmask_10', (H.npart,), dtype=np.bool_)
-        goodmask = mem['mass_10'] < 1.0001*H.massp
-        # if(H.verbose): print(f"\t|> Mass mask applied: {np.sum(goodmask)} particles kept out of {H.npart} ({100*np.sum(goodmask)/H.npart:.2f}%)", flush=True)
-        if H.zoombox is None:
-            goodpos = mem['pos_10'][goodmask]
-            xmin, xmax = np.min(goodpos[:,0]), np.max(goodpos[:,0])
-            ymin, ymax = np.min(goodpos[:,1]), np.max(goodpos[:,1])
-            zmin, zmax = np.min(goodpos[:,2]), np.max(goodpos[:,2])
-            H.zoombox = np.array([xmin,xmax,ymin,ymax,zmin,zmax])
-        xmin,xmax,ymin,ymax,zmin,zmax = H.zoombox
-        if(H.verbose): print(f"\t|> Zoom-in box (in box units): ")
-        if(H.verbose): print(f"\t|    x=[{xmin:.3f}, {xmax:.3f}]")
-        if(H.verbose): print(f"\t|    y=[{ymin:.3f}, {ymax:.3f}]")
-        if(H.verbose): print(f"\t|    z=[{zmin:.3f}, {zmax:.3f}]")
-        H.zoombox = np.array([xmin,xmax,ymin,ymax,zmin,zmax])
-        # goodmask = goodmask & (mem['pos_10'][:,0] >= xmin) & (mem['pos_10'][:,0] <= xmax) & (mem['pos_10'][:,1] >= ymin) & (mem['pos_10'][:,1] <= ymax) & (mem['pos_10'][:,2] >= zmin) & (mem['pos_10'][:,2] <= zmax)
-        mem['refmask_10'][:] = goodmask
-        if(H.verbose): print(f"\t|> Zoom-in mask applied: {np.sum(goodmask)} particles kept out of {H.npart} ({100*np.sum(goodmask)/H.npart:.2f}%)", flush=True)
-        
-
     if(H.verbose): print(f"\t------------------------------------------------------------------\n", flush=True)
 
 #***********************************************************************
@@ -842,10 +790,6 @@ def write_tree_brick_hdf():
         finput.attrs['eps_SC']=H.eps_SC
         finput.attrs['nsteps']=H.nsteps
         finput.attrs['dump_dms']=H.dump_dms
-        finput.attrs['zoomin']=H.zoomin
-        if H.zoomin:
-            finput.attrs['zoombox']=H.zoombox
-
         #---------------------------------
         # Catalog
         #---------------------------------
