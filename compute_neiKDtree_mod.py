@@ -1,5 +1,3 @@
-from itertools import count
-from weakref import ref
 import halo_defs as H
 from halo_defs import mem,frange,maccess, datdump, datload
 import numpy as np

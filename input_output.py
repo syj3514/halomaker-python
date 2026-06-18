@@ -9,7 +9,7 @@ import multiprocessing as mp
 ctx = mp.get_context('fork')
 Pool = ctx.Pool
 
-import faulthandler, signal, sys
+import faulthandler
 faulthandler.enable()
 faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True)
 

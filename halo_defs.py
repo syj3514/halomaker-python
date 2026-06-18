@@ -1,8 +1,7 @@
 import numpy as np
-from multiprocessing import Pool, shared_memory
+from multiprocessing import shared_memory
 from collections import defaultdict
 from scipy.io import FortranFile
-from tqdm import tqdm
 import time
 import atexit, signal
 import sys, os
