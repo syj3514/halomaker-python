@@ -373,40 +373,6 @@ def jacobi_gemini1(a_in, itermax=50):
 #***********************************************************************
 from scipy.special import elliprf
 rf = elliprf
-# def rf(x, y, z):
-#     errtol = 0.08
-#     tiny = 1.5e-38
-#     big = 3.e37
-#     third = 1. / 3.
-#     c1 = 1. / 24.
-#     c2 = 0.1
-#     c3 = 3. / 44.
-#     c4 = 1. / 14.
-
-#     if min(x, y, z) < 0.0 or min(x + y, x + z, y + z) < tiny or max(x, y, z) > big:
-#         raise ValueError("Invalid arguments in rf")
-
-#     xt = x
-#     yt = y
-#     zt = z
-
-#     while True:
-#         sqrtx = np.sqrt(xt)
-#         sqrty = np.sqrt(yt)
-#         sqrtz = np.sqrt(zt)
-#         alamb = sqrtx * (sqrty + sqrtz) + sqrty * sqrtz
-#         xt = 0.25 * (xt + alamb)
-#         yt = 0.25 * (yt + alamb)
-#         zt = 0.25 * (zt + alamb)
-#         ave = third * (xt + yt + zt)
-#         delx = (ave - xt) / ave
-#         dely = (ave - yt) / ave
-#         delz = (ave - zt) / ave
-#         if max(abs(delx), abs(dely), abs(delz)) > errtol:
-#             continue
-#         e2 = delx * dely - delz ** 2
-#         e3 = delx * dely * delz
-#         return (1. + (c1 * e2 - c2 - c3 * e3) * e2 + c4 * e3) / np.sqrt(ave)
 
 #***********************************************************************
 def cubic(a1, a2, a3, a4):

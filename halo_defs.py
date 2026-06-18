@@ -464,25 +464,6 @@ class grp:
 
     def __str__(self):
         return f"grp(nhnei={self.nhnei}, isad_gr={self.isad_gr}, rho_saddle_gr={self.rho_saddle_gr}) (tmp={self.tmp})"
-# class supernode:
-#     __slots__ = ["level","mother","firstchild","nsisters","sister","rho_saddle","density","densmax","radius","mass","truemass","position"]
-#     def __init__(self):
-#         # Int32
-#         self.mass = 0
-#         self.level = 0
-#         self.mother = 0
-#         self.firstchild = 0
-#         self.nsisters = 0
-#         self.sister = 0
-#         # Float64
-#         self.rho_saddle = 0.0
-#         self.density = 0.0
-#         self.densmax = 0.0
-#         self.radius = 0.0
-#         self.truemass = 0.0
-#         self.position = np.empty(3, dtype=np.float64)
-
-# node_0:list['supernode'] = []
 node_dtype = np.dtype([
                     ('rho_saddle','f8'), ('density','f8'), ('densmax','f8'), ('radius','f8'),
                     ('truemass','f8'), ('px','f8'), ('py','f8'), ('pz','f8'),
@@ -491,8 +472,6 @@ node_dtype = np.dtype([
                     ])
 node_0:np.ndarray = np.empty(0, dtype=node_dtype)
 group:list['grp'] = []
-#    type (grp), allocatable       :: group(:)
-#    type (supernode), allocatable :: node_0(:)
 
 #======================================================================
 # Flags for halo finder selection

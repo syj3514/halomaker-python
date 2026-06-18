@@ -781,43 +781,6 @@ def fromndarrays(ndarrays, dtype):
         col += bnda.shape[1]
     return array
 
-# #=======================================================================
-# def create_group_tree_1314_fortran():
-# #=======================================================================
-#     sync_fortran()
-#     neikdtree.create_group_tree(
-#         # (nhop, npart)
-#         np.asfortranarray(mem['iparneigh_1312']), # unchanged
-#         # (npart,)
-#         np.asfortranarray(mem['igrouppart_1313']),# unchanged
-#         np.asfortranarray(mem['idpart_1311']),
-#         np.asfortranarray(mem['density_1312']),   # unchanged
-#         # (npart, 3)
-#         np.asfortranarray(mem['pos_10']),         # unchanged
-#         # (ngroups,)
-#         np.asfortranarray(mem['densityg_1313']),
-#         np.asfortranarray(mem['firstpart_1313']),
-#         # (nusedpart, )
-#         np.asfortranarray(mem['whereIam_parts'])
-#         )
-
-#     mem['whereIam_parts'][:] = neikdtree.liste_parts[:]
-#     H.nnodes = int(neikdtree.nnodes)
-#     H.node_0 = np.zeros(H.nnodes+1, dtype=H.node_dtype)
-#     arr = [neikdtree.real_table.T, neikdtree.integer_table.T]
-#     node_0 = fromndarrays(arr, dtype=H.node_dtype)
-#     H.node_0[1:] = node_0
-    
-#     # Close real_table, integer_table, liste_parts
-#     del arr
-#     neikdtree.close()
-
-#     H.deallocate('igrouppart_1313')
-#     H.deallocate('iparneigh_1312')
-#     H.deallocate('idpart_1311')
-#     H.deallocate('densityg_1313')
-#     H.deallocate('firstpart_1313')
-
 
 #=======================================================================
 def create_group_tree_1314():
