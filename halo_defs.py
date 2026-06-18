@@ -52,7 +52,7 @@ def maccess(name):
 def mlist():
     global mem_address
     rows = []
-    for name in mem_address.keys():
+    for name in mem_address:
         shape = mem_address[name][1]
         dtype = mem_address[name][2]
         dtype_str = getattr(dtype, "name", str(dtype))
@@ -103,7 +103,7 @@ def allocate(name, shape, dtype:type|np.dtype=np.float64):
     arr = np.empty(shape, dtype=dtype)
     _name = collapse_mprefix() + f"_{name}"
     temp = shared_memory.SharedMemory(create=True, size=arr.nbytes, name=_name)
-    if(name in mem_address.keys()):
+    if(name in mem_address):
         if(mem_address[name] is not None):
             raise Exception(f"\t@Memory address `{name}` already exists")
     mem_address[name] = [temp, arr.shape, arr.dtype]
@@ -113,12 +113,12 @@ def allocate(name, shape, dtype:type|np.dtype=np.float64):
 
 def allocated(name):
     global mem
-    return name in mem.keys()
+    return name in mem
 
 def deallocate(*names):
     global mem, mem_address
     for name in names:
-        if(name in mem.keys()):
+        if(name in mem):
             if(DEV): print(f"\t@Deallocating memory `{name}`")
             if mem_address[name] is not None:
                 mem[name] = None

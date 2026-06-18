@@ -876,9 +876,9 @@ def det_center_18(h:np.void, member:tuple):
         drxs = correct_for_periodicity_1d(ipos[:,0] - pc.x)
         drys = correct_for_periodicity_1d(ipos[:,1] - pc.y)
         drzs = correct_for_periodicity_1d(ipos[:,2] - pc.z)
-        drs = np.sqrt(drxs**2 + drys**2 + drzs**2)
-        min_index = np.argmin(drs)
-        if drs[min_index] < distmin:
+        drs2 = drxs**2 + drys**2 + drzs**2
+        min_index = np.argmin(drs2)
+        if drs2[min_index] < distmin*distmin:
             cpos = ipos[min_index]
     else:
         dens = member[5]
