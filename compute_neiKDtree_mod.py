@@ -3,7 +3,6 @@ from halo_defs import mem,frange,maccess, datdump, datload
 import numpy as np
 from tqdm import tqdm
 from num_rec import spline, splines,splines_numba, icellid, icellids, counting_argsort_8, assign_struct_ids
-from multiprocessing import Manager
 import multiprocessing as mp
 ctx = mp.get_context('fork')
 Pool = ctx.Pool
@@ -19,9 +18,7 @@ def stop(): raise ValueError("Stop")
 # ncall_create_nodes = 0
 # ncall = 0
 print_prefix = "    "
-GLOBAL = Manager()
-ncall = GLOBAL.Value('i', 0)
-# ncall_create_nodes = GLOBAL.Value('i', 0)
+ncall = 0  # debug counter for do_colorize_131430; plain int avoids import-time Manager() server (sandbox-safe)
 ntest = 0
 inccell = 0
 ind_deepcount = 0
@@ -1244,8 +1241,8 @@ def do_colorize_131430(igroup1,igr1,rhot): #YDdebug
 #=======================================================================
     global ncall, icolor_select
 
-    ncall.value += 1
-    print(f"{print_prefix}do_colorize : igroup1={igroup1}, igr1={igr1}, color={icolor_select}, rhot={rhot}, ncall={ncall.value}")
+    ncall += 1
+    print(f"{print_prefix}do_colorize : igroup1={igroup1}, igr1={igr1}, color={icolor_select}, rhot={rhot}, ncall={ncall}")
     mem['color_1314'][igr1-1]=icolor_select
     neig=H.group[igroup1-1].nhnei
     for ineig0 in range(H.group[igroup1-1].nhnei):
