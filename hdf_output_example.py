@@ -48,11 +48,8 @@ def read_bricks_hdf(fname, return_params=False, return_pids=False):
         if return_params:
             header = f['header'] # group
             finput = f['input'] # group
-            params = {}
-            for key in header.attrs.keys():
-                params[key] = header.attrs[key]
-            for key in finput.attrs.keys():
-                params[key] = finput.attrs[key]
+            params = dict(header.attrs)
+            params.update(finput.attrs)
             if return_pids:
                 pids = f['member']['pids'][:] # dataset
                 indices = f['member']['index'][:] # dataset

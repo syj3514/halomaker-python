@@ -1782,12 +1782,10 @@ def det_main_axis_1b2(h:np.void, member=None):
     '''
     determine the principal axis of the halo (h['sha'],b,c)
     '''
-    # from num_rec import jacobi
     from scipy.linalg import eigh
 
     mat = det_inertial_tensor_1b20(h, member=member) # (10^11 M_sun) * (Mpc)^2
 
-    # d,v = jacobi(mat.copy())
     d, v = eigh(mat) # d in (10^11 M_sun) * (Mpc)^2, v is unitless
     d      = np.sqrt(d/h['m']) # in Mpc
     h['sha'] = d[0] # in Mpc

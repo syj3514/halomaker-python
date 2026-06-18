@@ -14,6 +14,7 @@ BANDS = (
     ("Vmag", "Johnson V", "Vega"),
     ("Kmag", "K", "Vega"),
 )
+BAND_INDEX = {name: index for index, (name, _, _) in enumerate(BANDS)}
 MODELS = ("CB07", "BC03", "FSPS")
 
 _TABLES = {}
@@ -100,7 +101,7 @@ def interpolation_coordinates(model, age_gyr, metal):
 
 def interpolate_magnitude(model, band, coordinates):
     ia0, ia1, iz0, iz1, wa, wz = coordinates
-    iband = tuple(name for name, _, _ in BANDS).index(band)
+    iband = BAND_INDEX[band]
     grid = load_table(model)["magnitudes"][:, :, iband]
     mag0 = grid[iz0, ia0] * (1.0 - wa) + grid[iz0, ia1] * wa
     mag1 = grid[iz1, ia0] * (1.0 - wa) + grid[iz1, ia1] * wa
