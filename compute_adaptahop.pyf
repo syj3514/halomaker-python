@@ -21,11 +21,10 @@ python module compute_adaptahop
                 real(kind=8), intent(in) :: boxsize2_in
             end subroutine sync_from_change_pos
 
-            subroutine sync_from_init_adaptahop(npart_in,nmembthresh_in,nmembers_in,zoomin_in,omegal_in,omega_lambda_f_in,omega0_in,omega_f_in,aexp_max_in,af_in,hubble_in,h_f_in,boxsize2_in,lf_in,xlong_in,ylong_in,zlong_in,xlongs2_in,ylongs2_in,zlongs2_in,hub_pt_in,aexp_in,pos_shift_in)
+            subroutine sync_from_init_adaptahop(npart_in,nmembthresh_in,nmembers_in,omegal_in,omega_lambda_f_in,omega0_in,omega_f_in,aexp_max_in,af_in,hubble_in,h_f_in,boxsize2_in,lf_in,xlong_in,ylong_in,zlong_in,xlongs2_in,ylongs2_in,zlongs2_in,hub_pt_in,aexp_in,pos_shift_in)
                 integer(kind=8), intent(in) :: npart_in
                 integer(kind=4), intent(in) :: nmembthresh_in
                 integer(kind=4), intent(in) :: nmembers_in
-                integer(kind=4), intent(in) :: zoomin_in
                 real(kind=8), intent(in) :: omegal_in
                 real(kind=8), intent(in) :: omega_lambda_f_in
                 real(kind=8), intent(in) :: omega0_in

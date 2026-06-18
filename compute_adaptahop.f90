@@ -116,7 +116,6 @@ module fhalo_defs
    integer(kind=4), allocatable :: color(:)
    ! integer(kind=4), allocatable :: partnode(:)
    real(kind=8), allocatable    :: densityg(:)
-   real(kind=8), allocatable    :: zoombox(:)
    real(kind=8)    :: sizeroot
    real(kind=8)    :: xlong, ylong, zlong, boxsize, boxsize2, xyzlong
    real(kind=8)    :: xlongs2, ylongs2, zlongs2
@@ -133,7 +132,7 @@ module fhalo_defs
    ! integer(kind=4) :: ncellbuffer
    integer(kind=8) :: ncellbuffer
    real(kind=8)    :: rho_threshold
-   logical         :: verbose,megaverbose,periodic,zoomin
+   logical         :: verbose,megaverbose,periodic
    ! real(kind=8)    :: fgas
    real(kind=8)    :: fudge,alphap,epsilon,fudgepsilon
    real(kind=8)    :: pos_shift(3),pos_renorm,velrenorm
@@ -486,7 +485,7 @@ subroutine sync_from_change_pos(npart_in, nusedpart_in, epsilon_in, fudgepsilon_
 end subroutine sync_from_change_pos
 
 subroutine sync_from_init_adaptahop( &
-            npart_in,nmembthresh_in,nMembers_in, zoomin_in, &
+            npart_in,nmembthresh_in,nMembers_in, &
             omegaL_in, omega_lambda_f_in,  &
             omega0_in, omega_f_in,  &
             aexp_max_in, af_in,  &
@@ -498,7 +497,7 @@ subroutine sync_from_init_adaptahop( &
             pos_shift_in)
    implicit none
 
-   integer(kind=4), intent(in) :: nmembthresh_in,nMembers_in, zoomin_in
+   integer(kind=4), intent(in) :: nmembthresh_in,nMembers_in
    integer(kind=8), intent(in) :: npart_in
    real(kind=8), intent(in) :: omegaL_in, omega_lambda_f_in,  &
             omega0_in, omega_f_in,  &
@@ -513,8 +512,6 @@ subroutine sync_from_init_adaptahop( &
    npart = int(npart_in, kind=8)
    nmembthresh = nmembthresh_in
    nMembers = nMembers_in
-   zoomin = .false.
-   if (zoomin_in.gt.0) zoomin = .true.
    omegaL = omegaL_in
    omega_lambda_f = omega_lambda_f_in
    omega0 = omega0_in

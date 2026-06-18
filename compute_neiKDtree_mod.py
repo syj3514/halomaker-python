@@ -182,7 +182,7 @@ def init_adaptahop_130():
     if H.FORTRAN:
         neikdtree.sync_from_init_adaptahop(
             # i4
-            H.npart,H.nmembthresh,H.nMembers, np.float32(0.0),
+            H.npart,H.nmembthresh,H.nMembers,
             # f8
             H.omegaL, H.omega_lambda_f, 
             H.omega0, H.omega_f, 
