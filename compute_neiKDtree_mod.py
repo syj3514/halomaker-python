@@ -227,7 +227,7 @@ def count_halos_1316():
 #=======================================================================
 def select_halos_1317():
 #=======================================================================
-    node_to_halo = np.zeros(H.nnodes, dtype=np.int32)-1
+    node_to_halo = np.full(H.nnodes, -1, dtype=np.int32)
 
     # counting number of halos
     H.nb_of_halos = 0
@@ -820,9 +820,8 @@ def create_group_tree_1314():
     igrouppart = mem['igrouppart_1313']
     mass = mem['mass_10']
     groupmask = igrouppart > 0
-    _ipar0 = np.where(groupmask)[0]
-    mass_loc = len(_ipar0)
-    truemass = np.sum(mass[_ipar0])
+    mass_loc = np.count_nonzero(groupmask)
+    truemass = np.sum(mass[groupmask])
 
     H.node_0[inode]['mass']          = mass_loc
     H.node_0[inode]['truemass']      = truemass
