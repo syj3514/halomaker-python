@@ -222,7 +222,7 @@ def count_halos_1316():
     # H.nb_of_halos = 0
     # for inode1 in frange(1,H.nnodes):
     #     if(H.node_0[inode1]['level']==1): H.nb_of_halos += 1
-    H.nb_of_halos = np.sum(H.node_0['level'][1:]==1)
+    H.nb_of_halos = np.count_nonzero(H.node_0['level'][1:]==1)
 
 #=======================================================================
 def select_halos_1317():
@@ -281,7 +281,7 @@ def select_with_MS_method_1319(mass_acc = 1.0e-2, strict=False):
 
     if(H.verbose)and(strict):
         # check that the new masses are correct
-        npartcheck_0 = np.zeros(H.nnodes+1, dtype=np.int32); npartcheck_0[:] = 0
+        npartcheck_0 = np.zeros(H.nnodes+1, dtype=np.int32)
         for ip1 in frange(1,H.nusedpart):
             if(mem['whereIam_parts'][ip1-1]<0): raise ValueError('whereIam_parts is smaller than 0')
             npartcheck_0[mem['whereIam_parts'][ip1-1]] += 1
@@ -1755,7 +1755,7 @@ def create_tree_structure_1311():
     mem['mass_cell_1311'][:]=0
     mem['sister_1311'][:]=0
     mem['firstchild_1311'][:]=0
-    H.sizeroot = np.float64( np.max([H.xlong,H.ylong,H.zlong]) )
+    H.sizeroot = np.float64(max(H.xlong, H.ylong, H.zlong))
 
     ref = time.time()
 
