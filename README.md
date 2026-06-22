@@ -153,16 +153,21 @@ DM/star/gas masses). It is restartable.
 
 ```bash
 # specific roots:
-python GasMaker.py <catalog.h5> <ramses_repo> <iout> --root-ids 3,11,15 --output gas.h5
+python GasMaker.py <catalog.h5> <ramses_repo> <iout> --root-ids 3,11,15
 # or all top-level halos:
-python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all --output gas.h5
+python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all
 ```
+
+The output defaults to `gas_bricks{iout:05d}.h5` (override with `--output`). It
+is row-aligned with the catalog and joined by `id`; see **`CATALOG_FORMAT.md`**
+for the full field list of both outputs.
 
 Snapshot reading is **pluggable**. The default reader (`gasmaker/readers/rur.py`)
 uses the `rur` package and is imported **lazily** — the GasMaker core does not
-depend on `rur`, so it installs and imports without it. Point `--rur-path` at
-your `rur` checkout, or implement the small `gasmaker.readers.base.CellReader`
-interface to read another simulation/format.
+depend on `rur`, so it installs and imports without it. By default it uses an
+installed `rur` (or `$RUR_PATH`); pass `--rur-path` for a checkout, or implement
+the small `gasmaker.readers.base.CellReader` interface (incl. `read_boxes` and
+`hydro_fields`) to read another simulation/format.
 
 > Status: validated against the RUR reference at machine precision on a
 > stratified NH2 sample (gas/particle masses, metallicity, chemistry — see

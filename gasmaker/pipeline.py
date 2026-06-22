@@ -639,7 +639,7 @@ class GasMaker:
         boxes = periodic_boxes(center, envelope_radius)
         
         # Discover hydro fields dynamically
-        all_fields, chem_elements = self.reader.snapshot.hydro_desc()
+        all_fields, chem_elements = self.reader.hydro_fields()
         base_fields = ["rho", "P", "metal", "vx", "vy", "vz"]
         fields = [f for f in base_fields + chem_elements if f in all_fields]
 

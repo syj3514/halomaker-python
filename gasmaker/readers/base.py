@@ -43,6 +43,10 @@ class CellReader(Protocol):
     def maximum_cell_half_diagonal(self) -> float:
         ...
 
+    def hydro_fields(self):
+        """Return (all_fields, chem_elements) available in the hydro data."""
+        ...
+
     def read_boxes(
         self,
         boxes: Sequence,

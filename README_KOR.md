@@ -139,16 +139,20 @@ r_vir 내부), 그리고 구형 overdensity(r200/m200, r500/m500 및 내부 DM/s
 
 ```bash
 # 특정 root만:
-python GasMaker.py <catalog.h5> <ramses_repo> <iout> --root-ids 3,11,15 --output gas.h5
+python GasMaker.py <catalog.h5> <ramses_repo> <iout> --root-ids 3,11,15
 # 또는 전체 top-level halo:
-python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all --output gas.h5
+python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all
 ```
+
+출력 기본 이름은 `gas_bricks{iout:05d}.h5`입니다(`--output`으로 변경 가능). 카탈로그와
+row 정렬되어 `id`로 join되며, 두 출력의 전체 필드 목록은 **`CATALOG_FORMAT.md`** 참고.
 
 스냅샷 reader는 **교체 가능(pluggable)** 합니다. 기본 reader
 (`gasmaker/readers/rur.py`)는 `rur` 패키지를 쓰지만 **lazy import** 되므로
-GasMaker core는 `rur`에 의존하지 않습니다(없어도 설치·import 가능). `--rur-path`로
-`rur` 위치를 지정하거나, 다른 시뮬/포맷은 `gasmaker.readers.base.CellReader`
-인터페이스를 구현하면 됩니다.
+GasMaker core는 `rur`에 의존하지 않습니다(없어도 설치·import 가능). 기본적으로 설치된
+`rur`(또는 `$RUR_PATH`)를 쓰며, checkout은 `--rur-path`로 지정하거나, 다른 시뮬/포맷은
+`gasmaker.readers.base.CellReader` 인터페이스(`read_boxes`·`hydro_fields` 포함)를
+구현하면 됩니다.
 
 > 상태: stratified NH2 표본에서 RUR reference와 머신정밀로 검증됨(가스/입자 질량,
 > 금속, 화학 — `WHATS_NEW.md` 참고). `r200/r500`은 threshold-crossing 보간을

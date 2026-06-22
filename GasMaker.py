@@ -43,7 +43,12 @@ def main():
     parser.add_argument("iout", type=int)
     parser.add_argument("root_id", type=int, nargs="?")
     parser.add_argument("--mode", default="nh2")
-    parser.add_argument("--output", type=Path, default=Path("gas.h5"))
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="output HDF5 path (default: gas_bricks{iout:05d}.h5)",
+    )
     parser.add_argument("--roots", choices=("all",), default="all")
     parser.add_argument("--root-ids", type=_parse_root_ids)
     parser.add_argument("--max-roots", type=int)
@@ -67,10 +72,12 @@ def main():
     parser.add_argument("--read-grav", action="store_true")
     parser.add_argument(
         "--rur-path",
-        default="/home/jeon/rur",
-        help="path to the rur package for the default RAMSES reader",
+        default=None,
+        help="path to a rur checkout (default: use installed rur, or $RUR_PATH)",
     )
     args = parser.parse_args()
+    if args.output is None:
+        args.output = Path(f"gas_bricks{args.iout:05d}.h5")
 
     try:
         reader = RurCellReader(

@@ -7,8 +7,12 @@ from .base import ReadResult
 
 
 class RurCellReader:
-    def __init__(self, repo, iout, mode="nh2", rur_path="/home/jeon/rur"):
-        if rur_path not in sys.path:
+    def __init__(self, repo, iout, mode="nh2", rur_path=None):
+        # Default: use an installed `rur`. Otherwise fall back to RUR_PATH, then
+        # to an explicit rur_path. No local user path is hard-coded.
+        if rur_path is None:
+            rur_path = os.environ.get("RUR_PATH")
+        if rur_path and rur_path not in sys.path:
             sys.path.insert(0, rur_path)
         from rur import uri
 
@@ -20,6 +24,14 @@ class RurCellReader:
     def maximum_cell_half_diagonal(self):
         levelmin = int(self.snapshot.params["levelmin"])
         return np.sqrt(3.0) * 0.5 * np.exp2(-levelmin)
+
+    def hydro_fields(self):
+        """Return (all_fields, chem_elements) available in the hydro data.
+
+        Part of the CellReader contract so the pipeline never reaches into a
+        backend-specific snapshot object.
+        """
+        return self.snapshot.hydro_desc()
 
     def read_boxes(
         self,
