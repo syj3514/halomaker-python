@@ -183,10 +183,17 @@ scientific reproducibility.
 ## ⚠️ Known caveats & things to watch
 Honest notes (confirmed with the original author) for anyone running or
 extending the pipeline:
-- **Stellar chemistry is not yet correctness-complete.** The per-element gas/star
-  chemistry fields came in at a patch stage and have not been through full
-  correctness validation; snapshots without chemistry need a graceful fallback,
-  and format differences around NH2 output 60 need their own test.
+- **GasMaker gas `r*` chemistry is validated; stellar chemistry is not yet.**
+  The GasMaker per-element **gas** chemistry (`H/O/Fe/Mg/C/N/Si/S/D_gas`,
+  `metal_gas`) on the stellar `r*` aperture was validated against the RUR
+  same-aperture reference at machine precision (TASK-11: N=432, median relative
+  error ~1e-16, max absolute error ≤ 2.97e-3 on `H_gas`; the tracked elements sum
+  to ~0.752, the remainder ~0.248 being He, consistent with RAMSES semantics),
+  and the missing-chemistry fallback was confirmed (absent fields stay `NaN`,
+  present fields are mass-weighted, the fixed schema is preserved). Still
+  **not** correctness-complete: the catalog **stellar** chemistry path, any
+  aperture-expanded chemistry schema, and format differences around NH2 output
+  60 have not been through the same validation.
 - **`initial_mass` (Ra4) reader assumes a particle descriptor order.** It locates
   `initial_mass` relative to `metallicity` in `part_file_descriptor.txt`; a
   simulation with a different descriptor order must be verified (the code errors
