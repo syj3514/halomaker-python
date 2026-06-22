@@ -211,8 +211,13 @@ extending the pipeline:
 ---
 
 ## 📋 In progress / next
-- All-halo RUR scientific validation of GasMaker (Tier 1 + Tier 2).
-- Folding the validated GasMaker prototype into the release tree.
+- All-root RUR scientific validation of GasMaker (Tier 1 + Tier 2). *Done at the
+  stratified-sample level (machine-precision PASS); full all-root is the
+  remaining optional cap.*
+- ~~Folding the validated GasMaker prototype into the release tree.~~ **Done** —
+  GasMaker is now a first-class release tool (`GasMaker.py` + `gasmaker/`).
+- ~~Stabilize the DM-profile inner-slope fit (`inslope`) against platform/compiler
+  floating-point drift.~~ **Done** — roundoff-degenerate shells are now dropped
+  from the fit; the residual is within the field-policy tolerance, so the frozen
+  goldens were not re-frozen.
 - Streaming/chunked verification harness for very large runs (npart > 10⁹).
-- Optional: stabilize the DM-profile inner-slope fit (`inslope`) against
-  platform/compiler floating-point drift.

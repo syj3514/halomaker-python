@@ -74,7 +74,7 @@ Notes:
 
 | Topic | Detail |
 |---|---|
-| `inslope` / `inslopeerr` | platform sensitivity caveat is documented in `WHATS_NEW.md` |
+| `inslope` / `inslopeerr` | DM inner-density-slope fit; roundoff-degenerate shells are dropped from the fit so the value is platform-stable (residual within field-policy tolerance) |
 | `r50` / `r90` | stellar half-/90%-mass radii in physical Mpc, not GasMaker code units |
 | `level == 1` | top-level root halos for GasMaker root selection |
 
