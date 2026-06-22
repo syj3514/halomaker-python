@@ -20,6 +20,8 @@ struct_tree.dat
 tree_bricks*
 input_HaloMaker.dat
 inputfiles_HaloMaker.dat
+gas.h5
+gas_*.h5
 AGENTS.md
 HANDOFF.md
 CLAUDE.md

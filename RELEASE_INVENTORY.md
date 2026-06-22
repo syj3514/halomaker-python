@@ -19,17 +19,25 @@ Runtime Python code:
 - `input_output.py`
 - `num_rec.py`
 - `hdf_output_example.py`
+- `ssp_photometry.py`
+
+GasMaker (gas post-processor):
+
+- `GasMaker.py` (entry point)
+- `gasmaker/` package: `pipeline.py`, `catalog.py`, `geometry.py`, `overlap.py`
+- `gasmaker/readers/`: `base.py` (reader interface), `rur.py` (optional rur
+  adapter, lazily imported — the core does not depend on `rur`)
 
 Final Fortran sources:
 
 - `compute_adaptahop.f90`
-- `compute_adaptahop_zoomin.f90`
 - `compute_adaptahop.pyf`
-- `compute_adaptahop_zoomin.pyf`
 
-The release Fortran filenames are canonical. They are staged from
-`compute_adaptahop_dev3.f90` and `compute_adaptahop_zoomin_dev3.f90` so that
-existing Python imports continue to work without branch-specific names.
+The pipeline is now **full-box only**: the legacy zoom-in Fortran module
+(`compute_adaptahop_zoomin.f90`/`.pyf`) was removed, and the fullbox interface
+no longer carries the zoom-in argument. The release Fortran filename is
+canonical, staged from `compute_adaptahop_dev3.f90` so existing Python imports
+work without branch-specific names.
 
 ## 2. Existing Files Excluded
 

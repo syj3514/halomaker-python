@@ -142,6 +142,33 @@ The first command is a dry run. The `--force` command terminates matching
 HaloMaker runtime processes in this repository and removes matching shared
 memory files owned by the current user.
 
+## GasMaker (gas post-processor)
+
+GasMaker is a separate tool that reads an existing HaloMaker/GalaxyMaker catalog
+plus the RAMSES AMR/hydro data and adds **gas properties** per halo and galaxy:
+total / cold (T<10⁴ K) / dense gas mass, gas metallicity and per-element
+chemistry, gas kinematics and angular momentum (within r\*, r50, r90, r_vir),
+and spherical-overdensity quantities (r200/m200, r500/m500 plus enclosed
+DM/star/gas masses). It is restartable.
+
+```bash
+# specific roots:
+python GasMaker.py <catalog.h5> <ramses_repo> <iout> --root-ids 3,11,15 --output gas.h5
+# or all top-level halos:
+python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all --output gas.h5
+```
+
+Snapshot reading is **pluggable**. The default reader (`gasmaker/readers/rur.py`)
+uses the `rur` package and is imported **lazily** — the GasMaker core does not
+depend on `rur`, so it installs and imports without it. Point `--rur-path` at
+your `rur` checkout, or implement the small `gasmaker.readers.base.CellReader`
+interface to read another simulation/format.
+
+> Status: validated against the RUR reference at machine precision on a
+> stratified NH2 sample (gas/particle masses, metallicity, chemistry — see
+> `WHATS_NEW.md`). `r200/r500` use threshold-crossing interpolation, which
+> differs by design from RUR's nearest-shell selection.
+
 ## Files
 
 - `HaloMaker.py`: command-line entry point
@@ -151,12 +178,14 @@ memory files owned by the current user.
 - `num_rec.py`: numerical helpers
 - `compute_neiKDtree_mod.py`: Python-to-Fortran bridge
 - `compute_adaptahop.f90`: optimized full-box AdaptaHOP extension
-- `compute_adaptahop_zoomin.f90`: optimized zoom-in AdaptaHOP extension
-- `compute_adaptahop*.pyf`: explicit f2py interfaces for portable builds
+- `compute_adaptahop.pyf`: explicit f2py interface for portable builds
 - `hdf_output_example.py`: simple HDF5 catalog reader example
 - `ssp_photometry.py`: compact SSP-table interpolation
 - `halomaker_data/ssp_tables`: generated SSP runtime tables; ignored by Git
 - `clean_runtime.sh`: dry-run / cleanup helper for interrupted runs
+- `GasMaker.py`: gas post-processor command-line entry point
+- `gasmaker/`: GasMaker package (`pipeline`, `catalog`, `geometry`, `overlap`)
+- `gasmaker/readers/`: pluggable snapshot readers (`base` interface + `rur` adapter)
 
 ## Preparing SSP tables
 
