@@ -1735,12 +1735,23 @@ def compute_extended_profiles_1e(h:np.void, member=None):
         rcut = min(rs, rvir)
         mask = dmdist < rcut
         if(np.sum(mask) >= 4):
-            xx = np.log10(dmdist[mask] / rvir)
-            shell_vol = 4.0/3.0*H.pi*dmdist[mask]**3
+            r_in = dmdist[mask]
+            m_in = dmmass[mask]
+            xx = np.log10(r_in / rvir)
+            shell_vol = 4.0/3.0*H.pi*r_in**3
             shell_vol = np.diff(np.insert(shell_vol, 0, 0.0))
-            valid = (shell_vol > 0) & (dmmass[mask] > 0)
+            # Drop roundoff-degenerate shells: when adjacent sorted radii differ
+            # by ~machine epsilon, the per-particle shell volume collapses to a
+            # near-zero value and mass/shell_vol spikes, corrupting the log-log
+            # fit and making `inslope` platform-sensitive. Filtering these shells
+            # removes the spike; halos with no degenerate shells are unaffected
+            # (this is a no-op there), so the fix is surgical.
+            rel_width = np.empty_like(r_in)
+            rel_width[0] = 1.0  # first shell (0 -> r[0]) is never degenerate
+            rel_width[1:] = (r_in[1:] - r_in[:-1]) / np.maximum(r_in[1:], np.finfo(np.float64).tiny)
+            valid = (shell_vol > 0) & (m_in > 0) & (rel_width > 1.0e-9)
             xx = xx[valid]
-            yy = np.log10(dmmass[mask][valid] / shell_vol[valid])
+            yy = np.log10(m_in[valid] / shell_vol[valid])
             if(len(xx) >= 4):
                 from scipy.optimize import curve_fit
                 def linefit(x, a, b):
