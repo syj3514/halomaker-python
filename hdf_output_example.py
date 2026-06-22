@@ -52,16 +52,19 @@ def read_bricks_hdf(fname, return_params=False, return_pids=False,
         Merged ``/header`` + ``/input`` attributes. Returned if ``return_params``.
     pids : numpy array, optional
         Flat member particle IDs (``/member/pids``). Returned if ``return_pids``.
-    index : numpy array, optional
-        Offsets into ``pids`` of length ``nhalo + 1``; members of catalog row
-        ``i`` are ``pids[index[i]:index[i+1]]``. Returned if ``return_pids``.
+    index, count : numpy arrays, optional
+        Per-entry offsets and member counts (length ``nhalo + 1``). Returned if
+        ``return_pids``. **Note the +1 offset:** ``/catalog/halo`` drops a leading
+        placeholder halo, but ``index``/``count`` keep it (this is what the
+        ``/member`` attr ``index_base = 1`` documents). So members of catalog row
+        ``i`` are ``pids[index[i+1]:index[i+1]+count[i+1]]`` — use ``members_of_row``.
 
     Examples
     --------
     >>> halo = read_bricks_hdf("tree_bricks00601.h5")
     >>> halo, params = read_bricks_hdf("tree_bricks00601.h5", return_params=True)
-    >>> halo, pids, index = read_bricks_hdf("tree_bricks00601.h5", return_pids=True)
-    >>> members_of_row0 = pids[index[0]:index[1]]
+    >>> halo, pids, index, count = read_bricks_hdf("tree_bricks00601.h5", return_pids=True)
+    >>> members_of_row0 = pids[index[1]:index[1]+count[1]]   # catalog row 0 -> entry 1
     '''
     with h5py.File(fname, 'r') as f:
         halo = f['catalog']['halo'][:]
@@ -87,6 +90,7 @@ def read_bricks_hdf(fname, return_params=False, return_pids=False,
             member = f['member']
             out.append(member['pids'][:])
             out.append(member['index'][:])
+            out.append(member['count'][:])
 
     if len(out) == 1:
         return out[0]
@@ -97,16 +101,19 @@ def read_members(fname):
     '''
     Read the full ``/member`` group as a dict.
 
-    Returns a dict with whatever member datasets are present. ``index`` (offsets,
-    length ``nhalo + 1``) and ``pids`` are always written. ``pos`` / ``vel`` /
-    ``mass`` are present only when the run enabled ``dump_DMs``. ``count`` (members
-    per halo) is present on recent outputs. Members of catalog row ``i`` are the
-    slice ``arr[index[i]:index[i+1]]`` for any flat member array ``arr``.
+    Returns a dict with whatever member datasets are present. ``index`` (offsets)
+    and ``pids`` are always written; ``count`` (members per entry) on recent
+    outputs; ``pos`` / ``vel`` / ``mass`` only when the run enabled ``dump_DMs``.
+
+    **Indexing (important):** ``/catalog/halo`` drops a leading placeholder halo,
+    but ``index``/``count`` keep it (``index``/``count`` have length ``nhalo + 1``;
+    the ``/member`` attr ``index_base = 1`` flags this). So **catalog row ``i``
+    maps to member entry ``i + 1``** — use ``members_of_row`` rather than slicing
+    by ``i`` directly.
 
     >>> mem = read_members("tree_bricks00601.h5")
-    >>> i = 0
-    >>> pids_i = mem['pids'][mem['index'][i]:mem['index'][i + 1]]
-    >>> pos_i = mem['pos'][mem['index'][i]:mem['index'][i + 1]]  # if dump_DMs
+    >>> pids_row0 = members_of_row(mem, 0, 'pids')
+    >>> pos_row0 = members_of_row(mem, 0, 'pos')   # if dump_DMs
     '''
     out = {}
     with h5py.File(fname, 'r') as f:
@@ -116,6 +123,20 @@ def read_members(fname):
             if key in member:
                 out[key] = member[key][:]
     return out
+
+
+def members_of_row(mem, i, field='pids'):
+    '''
+    Return member array ``field`` for catalog row ``i`` (0-based).
+
+    Handles the +1 placeholder offset: catalog row ``i`` is member entry ``i+1``.
+    ``mem`` is the dict from ``read_members``; ``field`` is one of
+    ``pids``/``pos``/``vel``/``mass``.
+    '''
+    j = i + 1
+    start = int(mem['index'][j])
+    stop = start + int(mem['count'][j])
+    return mem[field][start:stop]
 
 
 def read_photometry(fname, model=None):
