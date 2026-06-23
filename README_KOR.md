@@ -127,6 +127,11 @@ attr, 필드별 `field_units` JSON attr이 붙습니다. physical Mpc 복원은
 `x_phys = x_code * box_physical_mpc`. 옛 단위를 가정한 분석 스크립트는 `units_version`
 으로 분기해야 합니다. 전체 필드 단위표는 **`CATALOG_FORMAT.md`** 참고.
 
+per-element 항성 화학조성을 저장하는 Ra4 스냅샷의 경우, catalog에 질량가중 항성 원소비
+`H_star, O_star, Fe_star, Mg_star, C_star, N_star, Si_star, S_star, D_star`(mass fraction)도
+포함됩니다(항성 chem 없는 스냅샷은 `NaN`). 전 멤버 pos/vel/mass를 함께 내보내려면
+`dump_members`를 켭니다(전 멤버 dump 의미; 옛 키 `dump_DMs`/`dump_stars`도 alias로 동작).
+
 Run이 Ctrl-C로 interrupt되었거나 scheduler에 의해 kill되었거나 Python
 `forkserver` / `resource_tracker` process가 남은 경우, 다음 명령으로 runtime
 leftover를 확인하고 정리할 수 있습니다.

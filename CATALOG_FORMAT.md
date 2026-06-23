@@ -45,9 +45,9 @@ feature/validation context.
 | `/member/index` | array | Yes | per-halo offset into flat member arrays |
 | `/member/count` | array | Yes | per-halo member count |
 | `/member/pids` | flat array | No, offset-based | member particle IDs |
-| `/member/pos` | flat array, optional | No, offset-based | member particle positions when `dump_DMs` is enabled |
-| `/member/vel` | flat array, optional | No, offset-based | member particle velocities when `dump_DMs` is enabled |
-| `/member/mass` | flat array, optional | No, offset-based | member particle masses when `dump_DMs` is enabled |
+| `/member/pos` | flat array, optional | No, offset-based | member particle positions when `dump_members` is enabled (legacy `dump_DMs`) |
+| `/member/vel` | flat array, optional | No, offset-based | member particle velocities when `dump_members` is enabled (legacy `dump_DMs`) |
+| `/member/mass` | flat array, optional | No, offset-based | member particle masses when `dump_members` is enabled (legacy `dump_DMs`) |
 | `/header` | attrs/group | N/A | run, box, cosmology, count metadata |
 | `/input` | group | N/A | input configuration snapshot |
 

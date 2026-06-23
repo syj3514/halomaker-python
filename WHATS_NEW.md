@@ -64,6 +64,22 @@ HaloMaker and GasMaker HDF5 outputs now share one unit system, removing a
 - **Breaking:** analysis code assuming the old units must branch on
   `units_version`. Full table in `CATALOG_FORMAT.md`.
 
+### Per-element stellar chemistry  **[released]**
+The catalog now carries per-element **stellar** chemistry — `H_star, O_star,
+Fe_star, Mg_star, C_star, N_star, Si_star, S_star, D_star` (mass fraction),
+mass-weighted over the same stellar members as `metal` (catalog is now
+81 fields). The Ra4 reader locates the `chem_*` star columns from the particle
+descriptor (no positional assumption); snapshots without stellar chemistry
+(e.g. Ra3) get `NaN` and run normally. Validated against the RUR reference
+(reader exact per-particle; aggregation matches `metal`). The 9-element list is
+shared with GasMaker's gas chemistry via a single `chem_species.py`.
+
+### `dump_DMs` → `dump_members`  **[released, config rename]**
+The member-dump flag is renamed to `dump_members` because it writes pos/vel/mass
+for **all** members (DM + stars), not just DM. The dormant GalaxyMaker-era
+`dump_stars` placeholder is retired. Legacy keys `dump_DMs` and `dump_stars` are
+still accepted as aliases, so existing input files keep working.
+
 ### Full-box is now the single, clean mode  **[released]**
 The legacy zoom-in code path has been fully removed (Python paths **and** the
 Fortran interface), so the pipeline runs one well-tested full-box mode.
@@ -199,17 +215,14 @@ scientific reproducibility.
 ## ⚠️ Known caveats & things to watch
 Honest notes (confirmed with the original author) for anyone running or
 extending the pipeline:
-- **GasMaker gas `r*` chemistry is validated; stellar chemistry is not yet.**
-  The GasMaker per-element **gas** chemistry (`H/O/Fe/Mg/C/N/Si/S/D_gas`,
-  `metal_gas`) on the stellar `r*` aperture was validated against the RUR
-  same-aperture reference at machine precision (TASK-11: N=432, median relative
-  error ~1e-16, max absolute error ≤ 2.97e-3 on `H_gas`; the tracked elements sum
-  to ~0.752, the remainder ~0.248 being He, consistent with RAMSES semantics),
-  and the missing-chemistry fallback was confirmed (absent fields stay `NaN`,
-  present fields are mass-weighted, the fixed schema is preserved). Still
-  **not** correctness-complete: the catalog **stellar** chemistry path, any
-  aperture-expanded chemistry schema, and format differences around NH2 output
-  60 have not been through the same validation.
+- **Per-element chemistry (gas + stellar) is validated; aperture-expanded
+  variants are not.** GasMaker **gas** chemistry on `r*` (TASK-11) and the
+  catalog **stellar** chemistry `*_star` (TASK-13) were both validated against
+  the RUR reference at machine precision, with the missing-chemistry fallback
+  confirmed (`NaN`, schema preserved). The tracked 9 elements sum to ~0.752
+  (remainder ~0.248 = He, consistent with RAMSES). Still open: aperture-resolved
+  stellar chemistry (r50/r90 variants are not produced), and NH2 output-60
+  format edge cases beyond the validated path.
 - **`initial_mass` (Ra4) reader assumes a particle descriptor order.** It locates
   `initial_mass` relative to `metallicity` in `part_file_descriptor.txt`; a
   simulation with a different descriptor order must be verified (the code errors

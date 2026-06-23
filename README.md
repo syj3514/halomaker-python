@@ -142,6 +142,13 @@ luminosity-weighted stellar age, metallicity, `r50`, and `r90`. FSPS uses the
 2MASS Ks response for its `Kmag`; this distinction is recorded in the group
 metadata. See `SSP_MODELS.md` for model definitions and data provenance.
 
+For Ra4 snapshots that store per-element stellar chemistry, the catalog also
+includes mass-weighted per-element stellar abundances `H_star, O_star, Fe_star,
+Mg_star, C_star, N_star, Si_star, S_star, D_star` (mass fraction); snapshots
+without stellar chemistry leave these `NaN`. Set `dump_members` (which writes
+per-member pos/vel/mass for all members; the old keys `dump_DMs`/`dump_stars`
+still work) to also export the flat `/member` arrays. See `CATALOG_FORMAT.md`.
+
 If a run is interrupted with Ctrl-C, killed by a scheduler, or leaves Python
 `forkserver` / `resource_tracker` processes behind, inspect and clean runtime
 leftovers with:
