@@ -1,6 +1,7 @@
 from halo_defs import mem, frange
 import halo_defs as H
 import numpy as np
+import json
 import atexit, os, signal, sys
 from scipy.io import FortranFile
 from tqdm import tqdm
@@ -12,6 +13,135 @@ Pool = ctx.Pool
 import faulthandler
 faulthandler.enable()
 faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True)
+
+UNITS_VERSION = "halomaker_units_v2"
+
+CATALOG_FIELD_UNITS = {
+    "id": "int",
+    "timestep": "int",
+    "nmem": "count",
+    "ndm": "count",
+    "nstar": "count",
+    "nbsub": "count",
+    "hosthalo": "int",
+    "hostsub": "int",
+    "level": "int",
+    "nextsub": "int",
+    "px": "code_unit",
+    "py": "code_unit",
+    "pz": "code_unit",
+    "px*": "code_unit",
+    "py*": "code_unit",
+    "pz*": "code_unit",
+    "vx": "km/s",
+    "vy": "km/s",
+    "vz": "km/s",
+    "Lx": "Msun Mpc km/s",
+    "Ly": "Msun Mpc km/s",
+    "Lz": "Msun Mpc km/s",
+    "Lx*": "Msun Mpc km/s",
+    "Ly*": "Msun Mpc km/s",
+    "Lz*": "Msun Mpc km/s",
+    "sha": "code_unit",
+    "shb": "code_unit",
+    "shc": "code_unit",
+    "m": "Msun",
+    "mdm": "Msun",
+    "m*": "Msun",
+    "r": "code_unit",
+    "r*": "code_unit",
+    "r50": "code_unit",
+    "r90": "code_unit",
+    "age": "Gyr",
+    "metal": "mass_fraction",
+    "SFR": "Msun/yr",
+    "SFR_r50": "Msun/yr",
+    "SFR_r90": "Msun/yr",
+    "SFR10": "Msun/yr",
+    "SFR10_r50": "Msun/yr",
+    "SFR10_r90": "Msun/yr",
+    "spin": "dimensionless",
+    "sigma": "km/s",
+    "sigma_dm": "km/s",
+    "sigma*": "km/s",
+    "vrot": "km/s",
+    "sig3d": "km/s",
+    "sigcyl": "km/s",
+    "vrot_r50": "km/s",
+    "sig3d_r50": "km/s",
+    "sigcyl_r50": "km/s",
+    "vrot_r90": "km/s",
+    "sig3d_r90": "km/s",
+    "sigcyl_r90": "km/s",
+    "ek": "Msun (km/s)^2",
+    "ep": "Msun (km/s)^2",
+    "et": "Msun (km/s)^2",
+    "rvir": "code_unit",
+    "mvir": "Msun",
+    "tvir": "K",
+    "cvel": "km/s",
+    "rho_0": "Msun/kpc^3",
+    "r_c": "code_unit",
+    "cNFW": "dimensionless",
+    "cNFWerr": "dimensionless",
+    "vmaxcir": "km/s",
+    "rmaxcir": "code_unit",
+    "inslope": "dimensionless",
+    "inslopeerr": "dimensionless",
+    "mcontam": "Msun",
+}
+
+PHOTOMETRY_FIELD_UNITS = {
+    "id": "int",
+    "umag": "mag",
+    "gmag": "mag",
+    "rmag": "mag",
+    "imag": "mag",
+    "zmag": "mag",
+    "Umag": "mag",
+    "Bmag": "mag",
+    "Vmag": "mag",
+    "Kmag": "mag",
+    "age_r": "Gyr",
+    "metal_r": "mass_fraction",
+    "r50_r": "code_unit",
+    "r90_r": "code_unit",
+}
+
+
+def _json_attr(mapping):
+    return json.dumps(mapping, sort_keys=True)
+
+
+def _convert_halo_catalog_units(cat, box_physical_mpc):
+    out = cat.copy()
+    names = set(out.dtype.names)
+    for field in ("m", "mdm", "m*", "mvir", "mcontam"):
+        if field in names:
+            out[field] *= 1.0e11
+    for field in ("px", "py", "pz", "px*", "py*", "pz*"):
+        if field in names:
+            out[field] = np.mod(out[field] / box_physical_mpc, 1.0)
+    for field in (
+        "r", "r*", "r50", "r90", "rvir", "r_c", "rmaxcir",
+        "sha", "shb", "shc",
+    ):
+        if field in names:
+            out[field] /= box_physical_mpc
+    for field in ("Lx", "Ly", "Lz", "Lx*", "Ly*", "Lz*", "ek", "ep", "et"):
+        if field in names:
+            out[field] *= 1.0e11
+    if "rho_0" in names:
+        out["rho_0"] *= 100.0
+    return out
+
+
+def _convert_photometry_units(photo, box_physical_mpc):
+    out = photo.copy()
+    for field in ("r50_r", "r90_r"):
+        if field in out.dtype.names:
+            out[field] /= box_physical_mpc
+    return out
 
 #///////////////////////////////////////////////////////////////////////
 #***********************************************************************
@@ -752,6 +882,9 @@ def write_tree_brick_hdf():
         header.attrs['omega_t'] = H.omega_t
         header.attrs['age_univ'] = H.age_univ
         header.attrs['boxsize2']=H.boxsize2
+        header.attrs['box_comoving_mpc'] = H.boxsize2
+        header.attrs['box_physical_mpc'] = H.aexp * H.boxsize2
+        header.attrs['units_version'] = UNITS_VERSION
         header.attrs['hubble']=H.hubble
         header.attrs['mboxp']=H.mboxp
         # HaloMaker data
@@ -793,9 +926,12 @@ def write_tree_brick_hdf():
         #---------------------------------
         # Catalog
         #---------------------------------
-        cat = H.liste_halos_o0[1:]
+        box_physical_mpc = H.aexp * H.boxsize2
+        cat = _convert_halo_catalog_units(H.liste_halos_o0[1:], box_physical_mpc)
         grp = f44.create_group('catalog')
-        grp.create_dataset('halo', shape=cat.shape, dtype=cat.dtype, data=cat, compression='lzf')
+        halo_ds = grp.create_dataset('halo', shape=cat.shape, dtype=cat.dtype, data=cat, compression='lzf')
+        halo_ds.attrs['field_units'] = _json_attr(CATALOG_FIELD_UNITS)
+        halo_ds.attrs['units_version'] = UNITS_VERSION
 
         from ssp_photometry import MODELS, model_metadata
         photometry = f44.create_group('photometry')
@@ -816,11 +952,16 @@ def write_tree_brick_hdf():
             model_group.attrs['Johnson_system'] = 'Vega'
             model_group.attrs['row_alignment'] = '/catalog/halo'
             model_group.attrs['fields'] = ','.join(H.photometry_ssp_dtype.names)
-            photo = mem[f'photometry_{model.lower()}'][1:]
-            model_group.create_dataset(
+            photo = _convert_photometry_units(
+                mem[f'photometry_{model.lower()}'][1:],
+                box_physical_mpc,
+            )
+            photo_ds = model_group.create_dataset(
                 'data', shape=photo.shape, dtype=photo.dtype,
                 data=photo, compression='lzf',
             )
+            photo_ds.attrs['field_units'] = _json_attr(PHOTOMETRY_FIELD_UNITS)
+            photo_ds.attrs['units_version'] = UNITS_VERSION
 
         #---------------------------------
         # Member
@@ -846,18 +987,22 @@ def write_tree_brick_hdf():
             mass_ds = grp.create_dataset(
                 'mass', shape=(len(pids),), dtype=mass_10.dtype,
                 compression='lzf', chunks=(member_chunk,))
-            pos_ds.attrs['unit'] = 'Mpc physical, centered box coordinates'
+            pos_ds.attrs['unit'] = 'code_unit'
+            pos_ds.attrs['coordinate_frame'] = 'RAMSES box [0,1), periodic'
             vel_ds.attrs['unit'] = 'km/s peculiar'
-            mass_ds.attrs['unit'] = '1e11 Msun'
+            mass_ds.attrs['unit'] = 'Msun'
+            mass_ds.attrs['units_version'] = UNITS_VERSION
+            pos_ds.attrs['units_version'] = UNITS_VERSION
+            vel_ds.attrs['units_version'] = UNITS_VERSION
             iterator = range(0, len(pids), member_chunk)
             if H.verbose:
                 iterator = tqdm(iterator, desc="Writing flat halo members", unit="chunk", ncols=100)
             for start in iterator:
                 end = min(start + member_chunk, len(pids))
                 src = pids0_groupsorted[start:end]
-                pos_ds[start:end, :] = pos_10[src, :]
+                pos_ds[start:end, :] = np.mod(pos_10[src, :] / box_physical_mpc, 1.0)
                 vel_ds[start:end, :] = vel_10[src, :]
-                mass_ds[start:end] = mass_10[src]
+                mass_ds[start:end] = mass_10[src] * 1.0e11
 
     full_path = os.path.abspath(filename)
     os.chmod(full_path, H.fchmod); os.chown(full_path, H.uid, H.gid)

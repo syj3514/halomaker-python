@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+import json
 import time
 
 import h5py
@@ -109,6 +110,67 @@ ROOT_METRICS_DTYPE = np.dtype([
 ])
 
 SCHEMA_VERSION = 3
+UNITS_VERSION = "halomaker_units_v2"
+GAS_FIELD_UNITS = {
+    "id": "int",
+    "root_id": "int",
+    "ncells": "count",
+    "ncells_center": "count",
+    "ncells_overlap": "count",
+    "overlap_resolved": "bool",
+    "radius_to_min_cell": "dimensionless",
+    "overlap_relative_bound": "dimensionless",
+    "mgas": "Msun",
+    "mgas_r50": "Msun",
+    "mgas_r90": "Msun",
+    "mgas_rvir": "Msun",
+    "mcold": "Msun",
+    "mcold_r50": "Msun",
+    "mcold_r90": "Msun",
+    "mcold_rvir": "Msun",
+    "mdense": "Msun",
+    "mdense_r50": "Msun",
+    "mdense_r90": "Msun",
+    "mdense_rvir": "Msun",
+    "r200": "code_unit",
+    "m200": "Msun",
+    "r500": "code_unit",
+    "m500": "Msun",
+    "mgas_r200": "Msun",
+    "mgas_r500": "Msun",
+    "mcold_r200": "Msun",
+    "mcold_r500": "Msun",
+    "mdense_r200": "Msun",
+    "mdense_r500": "Msun",
+    "mdm_rvir": "Msun",
+    "mdm_r200": "Msun",
+    "mdm_r500": "Msun",
+    "mstar_rvir": "Msun",
+    "mstar_r200": "Msun",
+    "mstar_r500": "Msun",
+    "metal_gas": "mass_fraction",
+    "vrot_gas": "km/s",
+    "sig3d_gas": "km/s",
+    "sigcyl_gas": "km/s",
+    "vrot_gas_r50": "km/s",
+    "sig3d_gas_r50": "km/s",
+    "sigcyl_gas_r50": "km/s",
+    "vrot_gas_r90": "km/s",
+    "sig3d_gas_r90": "km/s",
+    "sigcyl_gas_r90": "km/s",
+    "Lx_gas": "Msun Mpc km/s",
+    "Ly_gas": "Msun Mpc km/s",
+    "Lz_gas": "Msun Mpc km/s",
+    "H_gas": "mass_fraction",
+    "O_gas": "mass_fraction",
+    "Fe_gas": "mass_fraction",
+    "Mg_gas": "mass_fraction",
+    "C_gas": "mass_fraction",
+    "N_gas": "mass_fraction",
+    "Si_gas": "mass_fraction",
+    "S_gas": "mass_fraction",
+    "D_gas": "mass_fraction",
+}
 
 
 @dataclass
@@ -254,9 +316,12 @@ class GasMaker:
         return np.sum(mass[distance < radius])
 
     def _spherical_overdensity(self, halo, cells, dms, stars, units):
-        center = halo_center_code(halo, self.catalog.box_physical_mpc)
+        center = halo_center_code(
+            halo, self.catalog.box_physical_mpc, self.catalog.units_version
+        )
         halo_radius = halo_radius_code(
-            halo, self.catalog.box_physical_mpc, self.radius_field
+            halo, self.catalog.box_physical_mpc, self.radius_field,
+            units_version=self.catalog.units_version,
         )
 
         cell_dist = self._distance_to_center(cells, center)
@@ -392,7 +457,8 @@ class GasMaker:
             output[field] = tier2[field]
 
         radius_rvir = halo_radius_code(
-            halo, self.catalog.box_physical_mpc, "rvir"
+            halo, self.catalog.box_physical_mpc, "rvir",
+            units_version=self.catalog.units_version,
         )
         aperture_radii = {
             "_rvir": radius_rvir,
@@ -437,8 +503,13 @@ class GasMaker:
                 output[field] = np.nan
                 
         # 1. Halo-scale: rvir (always computed)
-        center_halo = halo_center_code(halo, box_physical_mpc)
-        radius_rvir = halo_radius_code(halo, box_physical_mpc, "rvir")
+        center_halo = halo_center_code(
+            halo, box_physical_mpc, self.catalog.units_version
+        )
+        radius_rvir = halo_radius_code(
+            halo, box_physical_mpc, "rvir",
+            units_version=self.catalog.units_version,
+        )
         candidate_mask_rvir = sphere_cell_mask(cells, center_halo, radius_rvir, self.include_boundary)
         selected_rvir = cells[candidate_mask_rvir]
         
@@ -468,13 +539,23 @@ class GasMaker:
         has_stars = (halo["nstar"] > 0) and np.isfinite(halo["r*"]) and (halo["r*"] > 0)
         if has_stars:
             center_star = np.array([halo["px*"], halo["py*"], halo["pz*"]])
-            center_star = np.mod(center_star / box_physical_mpc, 1.0)
+            if self.catalog.units_version == "halomaker_units_v2":
+                center_star = np.mod(center_star, 1.0)
+            else:
+                center_star = np.mod(center_star / box_physical_mpc, 1.0)
             
-            radius_rstar = halo_radius_code(halo, box_physical_mpc, "r*")
+            radius_rstar = halo_radius_code(
+                halo, box_physical_mpc, "r*",
+                units_version=self.catalog.units_version,
+            )
             r50_val = float(halo["r50"])
             r90_val = float(halo["r90"])
-            radius_r50 = r50_val / box_physical_mpc if (np.isfinite(r50_val) and r50_val > 0) else 0.0
-            radius_r90 = r90_val / box_physical_mpc if (np.isfinite(r90_val) and r90_val > 0) else 0.0
+            if self.catalog.units_version == "halomaker_units_v2":
+                radius_r50 = r50_val if (np.isfinite(r50_val) and r50_val > 0) else 0.0
+                radius_r90 = r90_val if (np.isfinite(r90_val) and r90_val > 0) else 0.0
+            else:
+                radius_r50 = r50_val / box_physical_mpc if (np.isfinite(r50_val) and r50_val > 0) else 0.0
+                radius_r90 = r90_val / box_physical_mpc if (np.isfinite(r90_val) and r90_val > 0) else 0.0
             
             candidate_mask_rstar = sphere_cell_mask(cells, center_star, radius_rstar, self.include_boundary)
             selected_rstar = cells[candidate_mask_rstar]
@@ -540,9 +621,9 @@ class GasMaker:
                     dvz = vz_kms - bulk_vz
                     
                     # Gas angular momentum
-                    Lx_val = np.sum(mass_msol_rstar * (dy * dvz - dz * dvy)) / 1e11
-                    Ly_val = np.sum(mass_msol_rstar * (dz * dvx - dx * dvz)) / 1e11
-                    Lz_val = np.sum(mass_msol_rstar * (dx * dvy - dy * dvx)) / 1e11
+                    Lx_val = np.sum(mass_msol_rstar * (dy * dvz - dz * dvy))
+                    Ly_val = np.sum(mass_msol_rstar * (dz * dvx - dx * dvz))
+                    Lz_val = np.sum(mass_msol_rstar * (dx * dvy - dy * dvx))
                     Lvec = np.array([Lx_val, Ly_val, Lz_val])
                     
                     output["Lx_gas"] = Lx_val
@@ -595,18 +676,23 @@ class GasMaker:
         rows = self.catalog.descendants(root_id)
         halos = self.catalog.halos[rows]
         root = self.catalog.halos[self.catalog.row_for_id(root_id)]
-        center = halo_center_code(root, self.catalog.box_physical_mpc)
+        center = halo_center_code(
+            root, self.catalog.box_physical_mpc, self.catalog.units_version
+        )
         
         required_radius = 0.0
         # TASK-07: keep the envelope bounded by the catalog halo max radius `r`.
         for halo in halos:
-            child_center_halo = halo_center_code(halo, self.catalog.box_physical_mpc)
+            child_center_halo = halo_center_code(
+                halo, self.catalog.box_physical_mpc, self.catalog.units_version
+            )
             dist_halo = np.linalg.norm(
                 child_center_halo - center
                 - np.rint(child_center_halo - center)
             )
             child_radius = halo_radius_code(
-                halo, self.catalog.box_physical_mpc, self.radius_field
+                halo, self.catalog.box_physical_mpc, self.radius_field,
+                units_version=self.catalog.units_version,
             )
             required_radius = max(required_radius, dist_halo + child_radius)
 
@@ -617,20 +703,25 @@ class GasMaker:
             )
             if has_stars:
                 child_center_star = np.array([halo["px*"], halo["py*"], halo["pz*"]])
-                child_center_star = np.mod(
-                    child_center_star / self.catalog.box_physical_mpc, 1.0
-                )
+                if self.catalog.units_version == "halomaker_units_v2":
+                    child_center_star = np.mod(child_center_star, 1.0)
+                else:
+                    child_center_star = np.mod(
+                        child_center_star / self.catalog.box_physical_mpc, 1.0
+                    )
                 dist_star = np.linalg.norm(
                     child_center_star - center
                     - np.rint(child_center_star - center)
                 )
                 radius_rstar = halo_radius_code(
-                    halo, self.catalog.box_physical_mpc, "r*"
+                    halo, self.catalog.box_physical_mpc, "r*",
+                    units_version=self.catalog.units_version,
                 )
                 required_radius = max(required_radius, dist_star + radius_rstar)
 
         root_radius = halo_radius_code(
-            root, self.catalog.box_physical_mpc, self.radius_field
+            root, self.catalog.box_physical_mpc, self.radius_field,
+            units_version=self.catalog.units_version,
         )
         envelope_radius = max(
             root_radius * self.padding,
@@ -684,6 +775,8 @@ class GasMaker:
 
     def _write_common_header(self, header, run_mode, requested_root_ids):
         header.attrs["schema_version"] = SCHEMA_VERSION
+        header.attrs["units_version"] = UNITS_VERSION
+        header.attrs["source_catalog_units_version"] = self.catalog.units_version
         header.attrs["source_catalog"] = str(self.catalog_path)
         header.attrs["radius_field"] = self.radius_field
         header.attrs["root_padding"] = self.padding
@@ -711,9 +804,11 @@ class GasMaker:
             gas.attrs["row_alignment"] = "/catalog/halo"
             gas.attrs["completion_authority"] = "/gas/root_metrics"
             gas.create_dataset("processed", data=np.zeros(self.catalog.halos.size, dtype=bool))
-            gas.create_dataset(
+            summary_ds = gas.create_dataset(
                 "summary", data=self._empty_summary(), compression="lzf"
             )
+            summary_ds.attrs["field_units"] = json.dumps(GAS_FIELD_UNITS, sort_keys=True)
+            summary_ds.attrs["units_version"] = UNITS_VERSION
             gas.create_dataset(
                 "root_metrics",
                 shape=(0,),

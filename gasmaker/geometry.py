@@ -1,17 +1,21 @@
 import numpy as np
 
 
-def halo_center_code(halo, box_mpc):
+def halo_center_code(halo, box_mpc, units_version="legacy"):
     center_mpc = np.array([halo["px"], halo["py"], halo["pz"]])
+    if units_version == "halomaker_units_v2":
+        return np.mod(center_mpc, 1.0)
     return np.mod(center_mpc / box_mpc, 1.0)
 
 
-def halo_radius_code(halo, box_mpc, radius_field="r", padding=1.0):
+def halo_radius_code(halo, box_mpc, radius_field="r", padding=1.0, units_version="legacy"):
     radius = float(halo[radius_field])
     if not np.isfinite(radius) or radius <= 0:
         raise ValueError(
             f"Invalid {radius_field}={radius} for halo id={halo['id']}"
         )
+    if units_version == "halomaker_units_v2":
+        return radius * padding
     return radius * padding / box_mpc
 
 

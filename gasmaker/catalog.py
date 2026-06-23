@@ -10,6 +10,7 @@ class HaloCatalog:
     box_physical_mpc: float
     box_comoving_mpc: float
     aexp: float
+    units_version: str
 
     @classmethod
     def read(cls, path):
@@ -17,11 +18,13 @@ class HaloCatalog:
             halos = hdf["catalog/halo"][:]
             box_comoving_mpc = float(hdf["header"].attrs["boxsize2"])
             aexp = float(hdf["header"].attrs["aexp"])
+            units_version = str(hdf["header"].attrs.get("units_version", "legacy"))
         return cls(
             halos=halos,
             box_physical_mpc=box_comoving_mpc * aexp,
             box_comoving_mpc=box_comoving_mpc,
             aexp=aexp,
+            units_version=units_version,
         )
 
     def row_for_id(self, halo_id):

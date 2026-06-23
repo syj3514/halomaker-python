@@ -17,15 +17,19 @@ feature/validation context.
 
 | Scope | Quantity type | Unit / convention | Notes |
 |---|---|---|---|
-| HaloMaker catalog | positions and radii | physical Mpc | applies to `px/py/pz`, `px*/py*/pz*`, `r`, `r*`, `r50`, `r90`, `rvir` |
-| HaloMaker catalog | masses | `10^11 Msun` | HaloMaker convention |
+| All outputs | positions and radii | RAMSES code units, box fraction `[0, 1)` | positions are periodic; recover physical Mpc with `x_phys = x_code * box_physical_mpc` using the desired centered convention |
+| HaloMaker catalog | masses | `Msun` | `10^11 Msun` legacy scaling has been removed from HDF5 output |
 | HaloMaker catalog | velocities | km/s | halo and stellar velocity fields |
+| HaloMaker catalog | angular momentum | `Msun Mpc km/s` | physical Mpc remains the length factor in angular momentum |
+| HaloMaker catalog | energy | `Msun (km/s)^2` | kinetic, potential, total energies |
+| HaloMaker catalog | density | `Msun/kpc^3` | `rho_0`; this is the only physical-volume exception to code-unit length output |
 | HaloMaker catalog | temperatures | K | e.g. `tvir` |
 | GasMaker | gas / particle masses | `Msun` | not `10^11 Msun` |
 | GasMaker | metallicity and chemistry | dimensionless mass fraction | mass-weighted where applicable |
 | GasMaker | gas kinematics | km/s | `vrot_gas`, `sig3d_gas`, `sigcyl_gas` families |
-| GasMaker | gas angular momentum | `10^11 Msun Mpc km/s` | `Lx_gas`, `Ly_gas`, `Lz_gas` |
-| GasMaker | `r200`, `r500` | code units, box fraction `[0, 1)` | multiply by `box_physical_mpc = header.boxsize2 * aexp` to get physical Mpc |
+| GasMaker | gas angular momentum | `Msun Mpc km/s` | `Lx_gas`, `Ly_gas`, `Lz_gas` |
+| Metadata | unit marker | `/header.units_version = halomaker_units_v2` | compound datasets also carry JSON `field_units` attrs |
+| Metadata | box size | `box_comoving_mpc = boxsize2`, `box_physical_mpc = aexp * boxsize2` | legacy `boxsize2` and `aexp` are retained |
 
 ## 3. HaloMaker File: `tree_bricks{iout:05d}.h5`
 
@@ -53,29 +57,29 @@ The source document describes `/catalog/halo` as a 72-field structured table.
 | Category | Fields | Unit / type | Meaning |
 |---|---|---|---|
 | Identity and hierarchy | `id`, `timestep`, `nmem`, `ndm`, `nstar`, `nbsub`, `hosthalo`, `hostsub`, `level`, `nextsub` | integer / counts | halo identity, member counts, host/subhalo relations, tree level |
-| Position | `px`, `py`, `pz` | physical Mpc | halo center |
-| Stellar center | `px*`, `py*`, `pz*` | physical Mpc | stellar center |
+| Position | `px`, `py`, `pz` | code unit `[0,1)` | halo center |
+| Stellar center | `px*`, `py*`, `pz*` | code unit `[0,1)` | stellar center |
 | Velocity | `vx`, `vy`, `vz` | km/s | halo velocity |
-| Angular momentum | `Lx`, `Ly`, `Lz` | catalog convention | total angular momentum |
-| Stellar angular momentum | `Lx*`, `Ly*`, `Lz*` | catalog convention | stellar angular momentum |
-| Shape | `sha`, `shb`, `shc` | catalog convention | principal-axis lengths |
-| Mass | `m`, `mdm`, `m*` | `10^11 Msun` | total, dark matter, and stellar mass |
-| Radii | `r`, `r*`, `r50`, `r90`, `rvir` | physical Mpc | extent, stellar radius, stellar half/90%-mass radii, virial radius |
-| Stellar population | `age`, `metal` | mass-weighted | stellar age and metallicity summaries |
-| Star formation rate, 100 Myr | `SFR`, `SFR_r50`, `SFR_r90` | catalog convention | SFR in stellar apertures |
-| Star formation rate, 10 Myr | `SFR10`, `SFR10_r50`, `SFR10_r90` | catalog convention | short-timescale SFR in stellar apertures |
-| Spin and dispersions | `spin`, `sigma`, `sigma_dm`, `sigma*` | catalog convention | spin and velocity dispersion summaries |
-| Stellar kinematics | `vrot`, `sig3d`, `sigcyl`, `vrot_r50`, `sig3d_r50`, `sigcyl_r50`, `vrot_r90`, `sig3d_r90`, `sigcyl_r90` | km/s-style kinematic quantities | stellar kinematics in `r*`, `r50`, `r90` apertures |
-| Energy and virial | `ek`, `ep`, `et`, `mvir`, `tvir`, `cvel` | mixed; `tvir` in K | energy and virial diagnostics |
-| NFW / density profile | `rho_0`, `r_c`, `cNFW`, `cNFWerr`, `vmaxcir`, `rmaxcir`, `inslope`, `inslopeerr` | catalog convention | profile fit and inner-slope diagnostics |
-| Contamination | `mcontam` | catalog mass convention | low-resolution / contaminant mass |
+| Angular momentum | `Lx`, `Ly`, `Lz` | `Msun Mpc km/s` | total angular momentum |
+| Stellar angular momentum | `Lx*`, `Ly*`, `Lz*` | `Msun Mpc km/s` | stellar angular momentum |
+| Shape | `sha`, `shb`, `shc` | code unit `[0,1)` | principal-axis lengths, not axis ratios |
+| Mass | `m`, `mdm`, `m*` | `Msun` | total, dark matter, and stellar mass |
+| Radii | `r`, `r*`, `r50`, `r90`, `rvir` | code unit `[0,1)` | extent, stellar radius, stellar half/90%-mass radii, virial radius |
+| Stellar population | `age`, `metal` | `Gyr`, mass fraction | stellar age and metallicity summaries |
+| Star formation rate, 100 Myr | `SFR`, `SFR_r50`, `SFR_r90` | `Msun/yr` | SFR in stellar apertures |
+| Star formation rate, 10 Myr | `SFR10`, `SFR10_r50`, `SFR10_r90` | `Msun/yr` | short-timescale SFR in stellar apertures |
+| Spin and dispersions | `spin`, `sigma`, `sigma_dm`, `sigma*` | dimensionless; km/s for dispersions | spin and velocity dispersion summaries |
+| Stellar kinematics | `vrot`, `sig3d`, `sigcyl`, `vrot_r50`, `sig3d_r50`, `sigcyl_r50`, `vrot_r90`, `sig3d_r90`, `sigcyl_r90` | km/s | stellar kinematics in `r*`, `r50`, `r90` apertures |
+| Energy and virial | `ek`, `ep`, `et`, `mvir`, `tvir`, `cvel` | `Msun (km/s)^2`; `mvir` Msun; `tvir` K; `cvel` km/s | energy and virial diagnostics |
+| NFW / density profile | `rho_0`, `r_c`, `cNFW`, `cNFWerr`, `vmaxcir`, `rmaxcir`, `inslope`, `inslopeerr` | `rho_0` Msun/kpc^3; `r_c/rmaxcir` code unit; `vmaxcir` km/s; others dimensionless | profile fit and inner-slope diagnostics |
+| Contamination | `mcontam` | `Msun` | low-resolution / contaminant mass |
 
 Notes:
 
 | Topic | Detail |
 |---|---|
 | `inslope` / `inslopeerr` | DM inner-density-slope fit; roundoff-degenerate shells are dropped from the fit so the value is platform-stable (residual within field-policy tolerance) |
-| `r50` / `r90` | stellar half-/90%-mass radii in physical Mpc, not GasMaker code units |
+| `r50` / `r90` | stellar half-/90%-mass radii in code units |
 | `level == 1` | top-level root halos for GasMaker root selection |
 
 ### 3.3 `/photometry/{CB07,BC03,FSPS}`
@@ -84,7 +88,7 @@ Notes:
 |---|---|---|---|
 | SDSS bands | `umag`, `gmag`, `rmag`, `imag`, `zmag` | AB magnitude | rest-frame stellar photometry |
 | Johnson bands | `Umag`, `Bmag`, `Vmag`, `Kmag` | Vega magnitude | FSPS `Kmag` uses 2MASS Ks; see group metadata |
-| r-band luminosity-weighted properties | `age_r`, `metal_r`, `r50_r`, `r90_r` | model/catalog convention | see `SSP_MODELS.md` |
+| r-band luminosity-weighted properties | `age_r`, `metal_r`, `r50_r`, `r90_r` | Gyr, mass fraction, code-unit radii | see `SSP_MODELS.md` |
 
 ## 4. GasMaker File: `gas_bricks{iout:05d}.h5`
 
@@ -119,6 +123,8 @@ Notes:
 | `total_cells_read` | total cells read over completed roots | recomputed from `/gas/root_metrics` |
 | `total_read_seconds` | total read time | recomputed from `/gas/root_metrics` |
 | `total_compute_seconds` | total compute time | recomputed from `/gas/root_metrics` |
+| `units_version` | GasMaker output unit schema | current value: `halomaker_units_v2` |
+| `source_catalog_units_version` | unit schema of the source catalog | used to interpret legacy vs current catalog position/radius fields |
 
 ### 4.3 `/gas` Attributes and Datasets
 
@@ -161,7 +167,7 @@ Overlap-diagnostic field meanings:
 | Gas kinematics, `r*` | `vrot_gas`, `sig3d_gas`, `sigcyl_gas` | km/s | Class C diagnostic in TASK-10 |
 | Gas kinematics, `r50` | `vrot_gas_r50`, `sig3d_gas_r50`, `sigcyl_gas_r50` | km/s | stellar `r50` aperture |
 | Gas kinematics, `r90` | `vrot_gas_r90`, `sig3d_gas_r90`, `sigcyl_gas_r90` | km/s | stellar `r90` aperture |
-| Gas angular momentum | `Lx_gas`, `Ly_gas`, `Lz_gas` | `10^11 Msun Mpc km/s` | on `r*` |
+| Gas angular momentum | `Lx_gas`, `Ly_gas`, `Lz_gas` | `Msun Mpc km/s` | on `r*` |
 
 ### 4.5 GasMaker Aperture Key
 
@@ -191,8 +197,7 @@ Overlap-diagnostic field meanings:
 | Topic | Status | Practical interpretation |
 |---|---|---|
 | GasMaker Class A fields | PASS on stratified TASK-10 sample | gas/particle masses, metallicity, and chemistry match RUR reference at machine precision under matched aperture definitions |
-| Galaxy aperture scaling bug claim | rejected / acquitted | catalog `r50`/`r90` are physical Mpc; apples-to-apples comparison removes the apparent explosion |
+| Galaxy aperture scaling bug claim | rejected / acquitted | legacy catalog `r50`/`r90` were physical Mpc; in `halomaker_units_v2` they are stored as code-unit radii, so downstream readers must branch on `units_version` |
 | `r200` / `r500` | Class B definition difference | GasMaker uses threshold-crossing interpolation; RUR uses nearest-shell style selection |
 | Gas kinematics | Class C diagnostic | axis/dispersion definitions differ from RUR scalar `vsig_gas` |
 | Stellar chemistry correctness | follow-up candidate | not the main blocker for TASK-10 Class A GasMaker gate |
-

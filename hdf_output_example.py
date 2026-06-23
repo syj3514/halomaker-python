@@ -16,12 +16,12 @@ import h5py
 import numpy as np
 
 
-# Catalog position/radius fields are stored in physical Mpc (see
-# CATALOG_FORMAT.md). The box spans [-box_physical, 0] Mpc, so dividing by
-# box_physical = aexp * boxsize2 maps positions to [-1, 0); adding 1 shifts them
-# to RAMSES code units [0, 1). Radii are lengths, so they are only scaled.
+# Current catalogs store position/radius fields in RAMSES code units [0, 1).
+# Legacy catalogs stored physical Mpc; read_bricks_hdf keeps the old
+# to_code_unit conversion for files without /header units_version.
 _POS_FIELDS = ("px", "py", "pz", "px*", "py*", "pz*")
-_RADIUS_FIELDS = ("r", "r*", "r50", "r90", "rvir")
+_RADIUS_FIELDS = ("r", "r*", "r50", "r90", "rvir", "r_c", "rmaxcir", "sha", "shb", "shc")
+CURRENT_UNITS_VERSION = "halomaker_units_v2"
 
 
 def read_bricks_hdf(fname, return_params=False, return_pids=False,
@@ -40,9 +40,10 @@ def read_bricks_hdf(fname, return_params=False, return_pids=False,
         Default False. (Unlike older versions, this now works independently of
         ``return_params``.)
     to_code_unit : bool, optional
-        Convert all position and radius fields from the stored physical Mpc to
-        RAMSES code units [0, 1). Default True (matches the historical example
-        default). Pass False to keep the raw physical-Mpc values as stored.
+        Return positions/radii in RAMSES code units [0, 1). For current
+        ``halomaker_units_v2`` files this is an identity operation because code
+        units are already stored. For legacy files, this converts physical Mpc
+        values to code units. Pass False to keep raw stored values.
 
     Returns
     -------
@@ -70,16 +71,18 @@ def read_bricks_hdf(fname, return_params=False, return_pids=False,
         halo = f['catalog']['halo'][:]
 
         if to_code_unit:
-            boxsize2 = f['header'].attrs['boxsize2']
-            aexp = f['header'].attrs['aexp']
-            box_physical = aexp * boxsize2
-            names = halo.dtype.names
-            for field in _POS_FIELDS:
-                if field in names:
-                    halo[field] = halo[field] / box_physical + 1.0
-            for field in _RADIUS_FIELDS:
-                if field in names:
-                    halo[field] = halo[field] / box_physical
+            units_version = f['header'].attrs.get('units_version', 'legacy')
+            if units_version != CURRENT_UNITS_VERSION:
+                boxsize2 = f['header'].attrs['boxsize2']
+                aexp = f['header'].attrs['aexp']
+                box_physical = aexp * boxsize2
+                names = halo.dtype.names
+                for field in _POS_FIELDS:
+                    if field in names:
+                        halo[field] = np.mod(halo[field] / box_physical, 1.0)
+                for field in _RADIUS_FIELDS:
+                    if field in names:
+                        halo[field] = halo[field] / box_physical
 
         out = [halo]
         if return_params:
