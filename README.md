@@ -117,6 +117,19 @@ bash run.sh
 
 The main HDF5 catalog output is written as `tree_bricks*.h5`.
 
+### Output units (breaking change: `halomaker_units_v2`)
+
+Catalog and GasMaker outputs now use one consistent unit system: **masses in
+`Msun`**, **positions / radii / shape axes in RAMSES code units `[0, 1)`**,
+angular momentum in `Msun Mpc km/s`, energies in `Msun (km/s)^2`, `rho_0` in
+`Msun/kpc^3`, velocities in `km/s`, ages in `Gyr`. The previous `10^11 Msun`
+mass scaling and physical-Mpc positions/radii are **no longer** in the HDF5
+output. Files are tagged `/header.units_version = "halomaker_units_v2"`, carry
+`box_comoving_mpc` / `box_physical_mpc` attributes, and per-field `field_units`
+JSON attributes. Recover physical Mpc with `x_phys = x_code * box_physical_mpc`.
+Analysis scripts that assumed the old units must branch on `units_version`. See
+**`CATALOG_FORMAT.md`** for the full field-by-field unit table.
+
 Each run computes intrinsic rest-frame stellar photometry with all bundled SSP
 models and writes the aligned results under:
 

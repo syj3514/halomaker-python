@@ -116,6 +116,17 @@ bash run.sh
 
 주요 HDF5 catalog output은 `tree_bricks*.h5`로 기록됩니다.
 
+### 출력 단위 (breaking change: `halomaker_units_v2`)
+
+이제 catalog와 GasMaker 출력은 단일 단위계를 씁니다: **질량 `Msun`**, **위치/반경/
+형상축 RAMSES code unit `[0,1)`**, 각운동량 `Msun Mpc km/s`, 에너지 `Msun (km/s)^2`,
+`rho_0` `Msun/kpc^3`, 속도 `km/s`, 나이 `Gyr`. 기존 `10^11 Msun` 질량 스케일과
+physical Mpc 위치/반경은 HDF5 출력에서 **더 이상 쓰지 않습니다.** 파일에는
+`/header.units_version = "halomaker_units_v2"`, `box_comoving_mpc`/`box_physical_mpc`
+attr, 필드별 `field_units` JSON attr이 붙습니다. physical Mpc 복원은
+`x_phys = x_code * box_physical_mpc`. 옛 단위를 가정한 분석 스크립트는 `units_version`
+으로 분기해야 합니다. 전체 필드 단위표는 **`CATALOG_FORMAT.md`** 참고.
+
 Run이 Ctrl-C로 interrupt되었거나 scheduler에 의해 kill되었거나 Python
 `forkserver` / `resource_tracker` process가 남은 경우, 다음 명령으로 runtime
 leftover를 확인하고 정리할 수 있습니다.

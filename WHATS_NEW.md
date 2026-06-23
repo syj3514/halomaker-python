@@ -48,6 +48,22 @@ HaloMaker alone does not produce.
 
 ## 🌟 HaloMaker — major changes
 
+### Consistent output units  **[released, breaking — `halomaker_units_v2`]**
+HaloMaker and GasMaker HDF5 outputs now share one unit system, removing a
+1e11× / physical-vs-code-unit mismatch that could silently corrupt joins
+(e.g. a gas fraction across the two files):
+- masses → `Msun` (was `10^11 Msun`); positions / radii / shape axes → RAMSES
+  code units `[0,1)`; angular momentum → `Msun Mpc km/s`; energies →
+  `Msun (km/s)^2`; `rho_0` → `Msun/kpc^3`; velocities/SFR/age/metal unchanged.
+- Conversion happens **only at the HDF5 write boundary** — internal physics is
+  untouched, so values differ from the old output by an exact unit factor and
+  nothing else (verified field-by-field; GasMaker results provably unchanged).
+- Files are tagged `units_version="halomaker_units_v2"` with `box_*_mpc` and
+  per-field `field_units` attrs; GasMaker reads the tag and stays correct on
+  both old and new catalogs. The 07206 / NH2 goldens were re-frozen to v2.
+- **Breaking:** analysis code assuming the old units must branch on
+  `units_version`. Full table in `CATALOG_FORMAT.md`.
+
 ### Full-box is now the single, clean mode  **[released]**
 The legacy zoom-in code path has been fully removed (Python paths **and** the
 Fortran interface), so the pipeline runs one well-tested full-box mode.
