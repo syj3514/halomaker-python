@@ -111,7 +111,7 @@ everything above:
   - **Star formation** is stored for both 100 Myr and 10 Myr windows
     (`SFR*` and `SFR10*`), each with total, r50, and r90 apertures.
 - **Member storage** in HDF5: per-row `index`/`count` plus a flat `pids` array
-  (and `pos`/`vel`/`mass` when `dump_DMs` is on).
+  (and `pos`/`vel`/`mass` when `dump_members` is on).
 - **SSP photometry** in three stellar-population models — **CB07** (Charlot &
   Bruzual 2007), **BC03** (Bruzual & Charlot 2003), and **FSPS** (via
   python-fsps) — all assuming a Chabrier IMF and SSP-normalized to 1 M⊙ formed.

@@ -17,6 +17,7 @@ Runtime Python code:
 - `compute_neiKDtree_mod.py`
 - `halo_defs.py`
 - `input_output.py`
+- `chem_species.py` (shared 9-element chemistry list for HaloMaker + GasMaker)
 - `num_rec.py`
 - `hdf_output_example.py`
 - `ssp_photometry.py`
