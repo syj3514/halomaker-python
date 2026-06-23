@@ -6,6 +6,8 @@ import time
 import atexit, signal
 import sys, os
 
+from chem_species import CHEM_STAR_FIELDS
+
 
 #======================================================================
 # Make Flags
@@ -248,6 +250,7 @@ halo_dtype = np.dtype([
         ('m', 'f8'),('mdm', 'f8'),('m*', 'f8'),
         ('r', 'f8'),('r*', 'f8'),('r50', 'f8'),('r90', 'f8'),
         ('age', 'f8'),('metal', 'f8'),
+        *[(field, 'f8') for field in CHEM_STAR_FIELDS],
         ('SFR', 'f8'),('SFR_r50', 'f8'),('SFR_r90', 'f8'),
         ('SFR10', 'f8'),('SFR10_r50', 'f8'),('SFR10_r90', 'f8'),
         ('spin', 'f8'),
@@ -281,6 +284,8 @@ def clear_halo(h):
     h['m'] = np.float64(0.0); h['mdm'] = np.float64(0.0); h['m*'] = np.float64(0.0)
     h['r'] = np.float64(0.0); h['r*'] = np.float64(np.nan); h['r50'] = np.float64(np.nan); h['r90'] = np.float64(np.nan)
     h['age'] = np.float64(np.nan); h['metal'] = np.float64(np.nan)
+    for field in CHEM_STAR_FIELDS:
+        h[field] = np.float64(np.nan)
     h['SFR'] = np.float64(0.0); h['SFR_r50'] = np.float64(0.0); h['SFR_r90'] = np.float64(0.0)
     h['SFR10'] = np.float64(0.0); h['SFR10_r50'] = np.float64(0.0); h['SFR10_r90'] = np.float64(0.0)
     h['spin'] = np.float64(0.0)
@@ -483,8 +488,7 @@ DPMMC = False # flag to select the densest particle in the most massive cell of 
 SC = False # flag to select the com within concentric spheres (not with FOF)
 dcell_min = np.float64(0.0)
 eps_SC = np.float64(0.0)
-dump_dms = False
-dump_stars = False
+dump_members = False  # write member pos/vel/mass for ALL members (DM+star)
 nchem=0
 
 #======================================================================
@@ -564,8 +568,7 @@ PARAMS = {
     'eps_SC':         (['eps_SC'],                                 np.float64),
 
     'nsteps':         (['nsteps', 'nsteps_do'],                    np.int32),
-    'dump_dms':       (['dump_DMs'],                               fbool),
-    'dump_stars':     (['dump_stars'],                             fbool),
+    'dump_members':   (['dump_members', 'dump_DMs', 'dump_stars'], fbool),
     'nchem':          (['nchem'],                                  np.int32),
 
     'dchmod':         (['dchmod'],                                 chmod),

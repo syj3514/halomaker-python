@@ -106,7 +106,7 @@ def read_members(fname):
 
     Returns a dict with whatever member datasets are present. ``index`` (offsets)
     and ``pids`` are always written; ``count`` (members per entry) on recent
-    outputs; ``pos`` / ``vel`` / ``mass`` only when the run enabled ``dump_DMs``.
+    outputs; ``pos`` / ``vel`` / ``mass`` only when the run enabled ``dump_members``.
 
     **Indexing (important):** ``/catalog/halo`` drops a leading placeholder halo,
     but ``index``/``count`` keep it (``index``/``count`` have length ``nhalo + 1``;
@@ -116,7 +116,7 @@ def read_members(fname):
 
     >>> mem = read_members("tree_bricks00601.h5")
     >>> pids_row0 = members_of_row(mem, 0, 'pids')
-    >>> pos_row0 = members_of_row(mem, 0, 'pos')   # if dump_DMs
+    >>> pos_row0 = members_of_row(mem, 0, 'pos')   # if dump_members
     '''
     out = {}
     with h5py.File(fname, 'r') as f:

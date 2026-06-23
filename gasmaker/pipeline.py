@@ -5,6 +5,7 @@ import time
 
 import h5py
 import numpy as np
+from chem_species import CHEM_ELEMENTS, CHEM_GAS_FIELDS
 
 from .catalog import HaloCatalog
 from .geometry import (
@@ -87,15 +88,7 @@ SUMMARY_DTYPE = np.dtype([
     ("Lz_gas", "f8"),
     
     # Chemistry (r* aperture)
-    ("H_gas", "f8"),
-    ("O_gas", "f8"),
-    ("Fe_gas", "f8"),
-    ("Mg_gas", "f8"),
-    ("C_gas", "f8"),
-    ("N_gas", "f8"),
-    ("Si_gas", "f8"),
-    ("S_gas", "f8"),
-    ("D_gas", "f8"),
+    *[(field, "f8") for field in CHEM_GAS_FIELDS],
 ])
 
 
@@ -161,15 +154,7 @@ GAS_FIELD_UNITS = {
     "Lx_gas": "Msun Mpc km/s",
     "Ly_gas": "Msun Mpc km/s",
     "Lz_gas": "Msun Mpc km/s",
-    "H_gas": "mass_fraction",
-    "O_gas": "mass_fraction",
-    "Fe_gas": "mass_fraction",
-    "Mg_gas": "mass_fraction",
-    "C_gas": "mass_fraction",
-    "N_gas": "mass_fraction",
-    "Si_gas": "mass_fraction",
-    "S_gas": "mass_fraction",
-    "D_gas": "mass_fraction",
+    **{field: "mass_fraction" for field in CHEM_GAS_FIELDS},
 }
 
 
@@ -596,7 +581,7 @@ class GasMaker:
                         output["metal_gas"] = np.average(selected_rstar["metal"], weights=mass_code_rstar)
                     
                     # Dynamically discovered chem element fractions
-                    for elem in ["H", "O", "Fe", "Mg", "C", "N", "Si", "S", "D"]:
+                    for elem in CHEM_ELEMENTS:
                         if elem in selected_rstar.dtype.names:
                             output[f"{elem}_gas"] = np.average(selected_rstar[elem], weights=mass_code_rstar)
                             

@@ -23,6 +23,7 @@ feature/validation context.
 | HaloMaker catalog | angular momentum | `Msun Mpc km/s` | physical Mpc remains the length factor in angular momentum |
 | HaloMaker catalog | energy | `Msun (km/s)^2` | kinetic, potential, total energies |
 | HaloMaker catalog | density | `Msun/kpc^3` | `rho_0`; this is the only physical-volume exception to code-unit length output |
+| HaloMaker catalog | stellar chemistry | dimensionless mass fraction | mass-weighted over the same full stellar-member aperture as `metal`; Ra3/no-chem inputs are `NaN` |
 | HaloMaker catalog | temperatures | K | e.g. `tvir` |
 | GasMaker | gas / particle masses | `Msun` | not `10^11 Msun` |
 | GasMaker | metallicity and chemistry | dimensionless mass fraction | mass-weighted where applicable |
@@ -52,7 +53,7 @@ feature/validation context.
 
 ### 3.2 `/catalog/halo` Field Groups
 
-The source document describes `/catalog/halo` as a 72-field structured table.
+The source document describes `/catalog/halo` as an 81-field structured table.
 
 | Category | Fields | Unit / type | Meaning |
 |---|---|---|---|
@@ -66,6 +67,7 @@ The source document describes `/catalog/halo` as a 72-field structured table.
 | Mass | `m`, `mdm`, `m*` | `Msun` | total, dark matter, and stellar mass |
 | Radii | `r`, `r*`, `r50`, `r90`, `rvir` | code unit `[0,1)` | extent, stellar radius, stellar half/90%-mass radii, virial radius |
 | Stellar population | `age`, `metal` | `Gyr`, mass fraction | stellar age and metallicity summaries |
+| Stellar chemistry | `H_star`, `O_star`, `Fe_star`, `Mg_star`, `C_star`, `N_star`, `Si_star`, `S_star`, `D_star` | dimensionless mass fraction | mass-weighted over all stellar members, same aperture as `metal`; `NaN` when the snapshot has no stellar chemistry descriptor |
 | Star formation rate, 100 Myr | `SFR`, `SFR_r50`, `SFR_r90` | `Msun/yr` | SFR in stellar apertures |
 | Star formation rate, 10 Myr | `SFR10`, `SFR10_r50`, `SFR10_r90` | `Msun/yr` | short-timescale SFR in stellar apertures |
 | Spin and dispersions | `spin`, `sigma`, `sigma_dm`, `sigma*` | dimensionless; km/s for dispersions | spin and velocity dispersion summaries |
@@ -81,6 +83,7 @@ Notes:
 | `inslope` / `inslopeerr` | DM inner-density-slope fit; roundoff-degenerate shells are dropped from the fit so the value is platform-stable (residual within field-policy tolerance) |
 | `r50` / `r90` | stellar half-/90%-mass radii in code units |
 | `level == 1` | top-level root halos for GasMaker root selection |
+| `*_star` chemistry | Ra4 snapshots with `chem_*` particle descriptors populate these fields; Ra3 or missing-descriptor snapshots keep them as `NaN` |
 
 ### 3.3 `/photometry/{CB07,BC03,FSPS}`
 
@@ -200,4 +203,4 @@ Overlap-diagnostic field meanings:
 | Galaxy aperture scaling bug claim | rejected / acquitted | legacy catalog `r50`/`r90` were physical Mpc; in `halomaker_units_v2` they are stored as code-unit radii, so downstream readers must branch on `units_version` |
 | `r200` / `r500` | Class B definition difference | GasMaker uses threshold-crossing interpolation; RUR uses nearest-shell style selection |
 | Gas kinematics | Class C diagnostic | axis/dispersion definitions differ from RUR scalar `vsig_gas` |
-| Stellar chemistry correctness | follow-up candidate | not the main blocker for TASK-10 Class A GasMaker gate |
+| Stellar chemistry correctness | TASK-13 schema | `*_star` fields are catalog-level stellar mass-fraction averages when Ra4 particle descriptors provide per-element chemistry; otherwise `NaN` fallback applies |

@@ -5,6 +5,7 @@ import json
 import atexit, os, signal, sys
 from scipy.io import FortranFile
 from tqdm import tqdm
+from chem_species import CHEM_ELEMENTS, CHEM_STAR_FIELDS
 # from multiprocessing import Pool
 import multiprocessing as mp
 ctx = mp.get_context('fork')
@@ -54,6 +55,7 @@ CATALOG_FIELD_UNITS = {
     "r90": "code_unit",
     "age": "Gyr",
     "metal": "mass_fraction",
+    **{field: "mass_fraction" for field in CHEM_STAR_FIELDS},
     "SFR": "Msun/yr",
     "SFR_r50": "Msun/yr",
     "SFR_r90": "Msun/yr",
@@ -354,7 +356,7 @@ def read_ramses_100(repository):
             H.deallocate('mass_10')
 
 
-def _ra4_initial_mass_skip(repository):
+def _parse_ra4_part_descriptor(repository):
     descriptor = os.path.join(repository, "part_file_descriptor.txt")
     if not os.path.exists(descriptor):
         return None
@@ -367,20 +369,83 @@ def _ra4_initial_mass_skip(repository):
             columns = [column.strip() for column in line.split(",")]
             if len(columns) >= 2:
                 fields.append(columns[1])
+    return fields
 
-    if "initial_mass" not in fields:
-        return None
-    if "metallicity" not in fields:
+
+def _ra4_stellar_descriptor(repository):
+    fields = _parse_ra4_part_descriptor(repository)
+    if fields is None:
+        return {"m0_skip": None, "chem_indices": {}, "nchem": 0}
+
+    m0_skip = None
+    if "initial_mass" in fields and "metallicity" not in fields:
+        descriptor = os.path.join(repository, "part_file_descriptor.txt")
         raise RuntimeError(
             f"Ra4 descriptor has initial_mass but no metallicity: {descriptor}"
         )
-    metal_index = fields.index("metallicity")
-    initial_mass_index = fields.index("initial_mass")
-    if initial_mass_index <= metal_index:
-        raise RuntimeError(
-            f"Unsupported Ra4 initial_mass record order: {descriptor}"
-        )
-    return initial_mass_index - metal_index - 1
+    if "initial_mass" in fields:
+        metal_index = fields.index("metallicity")
+        initial_mass_index = fields.index("initial_mass")
+        if initial_mass_index <= metal_index:
+            descriptor = os.path.join(repository, "part_file_descriptor.txt")
+            raise RuntimeError(
+                f"Unsupported Ra4 initial_mass record order: {descriptor}"
+            )
+        m0_skip = initial_mass_index - metal_index - 1
+    chem_indices = {}
+    for element in CHEM_ELEMENTS:
+        name = f"chem_{element}"
+        if name in fields:
+            chem_indices[element] = fields.index(name)
+    return {
+        "m0_skip": m0_skip,
+        "chem_indices": chem_indices,
+        "nchem": len(chem_indices),
+        "fields": fields,
+    }
+
+
+def _read_ra4_stellar_record_block(f, npart, descriptor, dmcount):
+    """Read birth/metal/m0/chem records in descriptor order after tag."""
+    tmpt = None
+    tmpmetal = None
+    tmpm0 = None
+    tmpchem = {}
+
+    fields = descriptor.get("fields")
+    if fields is None:
+        tmpt = f.read_reals()
+        tmpmetal = f.read_reals()
+        if descriptor["m0_skip"] is not None:
+            skip_records(f, descriptor["m0_skip"])
+            tmpm0 = f.read_reals()
+        return tmpt, tmpmetal, tmpm0, tmpchem
+
+    targets = {"birth_time", "metallicity", "initial_mass"}
+    targets.update(f"chem_{element}" for element in descriptor["chem_indices"])
+    target_positions = [fields.index(name) for name in targets if name in fields]
+    if not target_positions:
+        return tmpt, tmpmetal, tmpm0, tmpchem
+    start = fields.index("tag") + 1 if "tag" in fields else min(target_positions)
+    stop = max(target_positions)
+
+    for index in range(start, stop + 1):
+        name = fields[index]
+        if name not in targets:
+            skip_records(f, 1)
+            continue
+        values = f.read_reals()
+        if name == "birth_time":
+            tmpt = values
+        elif name == "metallicity":
+            tmpmetal = values
+        elif name == "initial_mass":
+            tmpm0 = values
+        elif name.startswith("chem_"):
+            element = name[5:]
+            if element in CHEM_ELEMENTS:
+                tmpchem[element] = values
+    return tmpt, tmpmetal, tmpm0, tmpchem
 
 
 #***********************************************************************
@@ -428,15 +493,20 @@ def _read_ramses_new_1010(icpu, kwargs):
         tmpt = None
         tmpmetal = None
         tmpm0 = None
+        tmpchem = {}
         if(rver=='Ra4'):
             # read particle family
             fam = f.read_ints(dtype=np.int8)
             # read particle tag
             skip_records(f, 1)
         if((nstar>0)or(nsink>0)):
-            if(rver != 'Ra4' or not dmcount):
+            if rver == 'Ra4' and not dmcount:
+                tmpt, tmpmetal, tmpm0, tmpchem = _read_ra4_stellar_record_block(
+                    f, npart2, kwargs['stellar_descriptor'], dmcount
+                )
+            elif(rver != 'Ra4' or not dmcount):
                 tmpt = f.read_reals()
-            if not dmcount:
+            if not dmcount and rver != 'Ra4':
                 tmpmetal = f.read_reals()
                 if kwargs['m0_skip'] is not None:
                     skip_records(f, kwargs['m0_skip'])
@@ -482,6 +552,12 @@ def _read_ramses_new_1010(icpu, kwargs):
             metal_10[star_slots] = tmpmetal[starmask]
             if tmpm0 is not None:
                 H.maccess('m0_10')[star_slots] = tmpm0[starmask]
+            if H.allocated('chem_10'):
+                chem_10 = H.maccess('chem_10')
+                for element_index, element in enumerate(CHEM_ELEMENTS):
+                    values = tmpchem.get(element)
+                    if values is not None:
+                        chem_10[star_slots, element_index] = values[starmask]
     return npart_tmp
 #***********************************************************************
 import time
@@ -498,7 +574,12 @@ def read_ramses_new_101(repository, rver='Ra3'):
     if(H.verbose): print(f"\t------------------------------------------------------------------")
     if(H.verbose): print(f"\t| Reading RAMSES version {rver}  ")
     if(H.verbose): print(f"\t------------------------------------------------------------------")
-    m0_skip = _ra4_initial_mass_skip(repository) if rver == 'Ra4' else None
+    stellar_descriptor = (
+        _ra4_stellar_descriptor(repository)
+        if rver == 'Ra4' else {"m0_skip": None, "chem_indices": {}, "nchem": 0}
+    )
+    m0_skip = stellar_descriptor["m0_skip"]
+    H.nchem = stellar_descriptor["nchem"]
 
     # read cosmological params in header of amr file
     ipos    = repository.find("output_")
@@ -600,7 +681,7 @@ def read_ramses_new_101(repository, rver='Ra3'):
         'repository':repository, 'rver':rver, 'nchar':nchar,
         'ndim':H.ndim, 'scale_l':scale_l, 'scale_t':scale_t,
         'snapshot_age':snapshot_age, 'dmcount':True,
-        'm0_skip':m0_skip}
+        'm0_skip':m0_skip, 'stellar_descriptor':stellar_descriptor}
     iterobj = range(1,H.ncpu+1)
     if(H.nbPes==1): # Sequential reading
         if(H.TQDM)and(H.megaverbose): pbar = tqdm(total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", file=sys.stdout, disable=(not H.megaverbose), ncols=100)
@@ -636,6 +717,9 @@ def read_ramses_new_101(repository, rver='Ra3'):
         if m0_skip is not None:
             H.allocate('m0_10', (H.nstar,), dtype=np.float64)
             mem['m0_10'][:] = np.nan
+        if H.nchem > 0:
+            H.allocate('chem_10', (H.nstar, len(CHEM_ELEMENTS)), dtype=np.float64)
+            mem['chem_10'][:, :] = np.nan
     # Read all parts
     kwargs['dmcount'] = False
     iterobj = range(1,H.ncpu+1)
@@ -671,10 +755,22 @@ def read_ramses_new_101(repository, rver='Ra3'):
             np.sum(np.isfinite(mem['m0_10']) & (mem['m0_10'] > 0))
             if H.allocated('m0_10') else H.nstar
         )
-        if n_age != H.nstar or n_metal != H.nstar or n_m0 != H.nstar:
+        n_chem = (
+            np.all(
+                np.isfinite(
+                    mem['chem_10'][
+                        :, [CHEM_ELEMENTS.index(element)
+                            for element in stellar_descriptor["chem_indices"]]
+                    ]
+                ),
+                axis=1,
+            ).sum()
+            if H.allocated('chem_10') else H.nstar
+        )
+        if n_age != H.nstar or n_metal != H.nstar or n_m0 != H.nstar or n_chem != H.nstar:
             raise RuntimeError(
                 f"Incomplete stellar properties: age={n_age}, metal={n_metal}, "
-                f"m0={n_m0}, "
+                f"m0={n_m0}, chem={n_chem}, "
                 f"expected={H.nstar}")
     if(H.verbose and H.nstar > 0):
         print(f"\t|> Stellar age range (Gyr)          = "
@@ -684,6 +780,12 @@ def read_ramses_new_101(repository, rver='Ra3'):
         if H.allocated('m0_10'):
             print(f"\t|> Stellar initial-mass range        = "
                   f"{np.min(mem['m0_10']):.6g} .. {np.max(mem['m0_10']):.6g}")
+        if H.allocated('chem_10'):
+            chem_10 = mem['chem_10']
+            print(f"\t|> Stellar chemistry elements        = "
+                  f"{','.join(CHEM_ELEMENTS)}")
+            print(f"\t|> Stellar chemistry range           = "
+                  f"{np.nanmin(chem_10):.6g} .. {np.nanmax(chem_10):.6g}")
     H.allocate('pos_10', (H.npart, H.ndim), dtype=np.float64)
     H.allocate('vel_10', (H.npart, H.ndim), dtype=np.float64)
     H.allocate('mass_10', (H.npart,), dtype=np.float64)
@@ -735,7 +837,7 @@ def write_tree_brick_1d():
     whereIam_idxs = mem['whereIam_idxs']
     whereIam_counts = mem['whereIam_counts']
     pids0_groupsorted = mem['pids0_groupsorted']
-    if H.dump_dms:
+    if H.dump_members:
         mass_10 = mem['mass_10']
         pos_10 = mem['pos_10']
         vel_10 = mem['vel_10']
@@ -773,7 +875,7 @@ def write_tree_brick_1d():
         indexps = pids0_groupsorted[idx:idx+count]
         timerecord[ith]+=time.time()-ref; ith+=1; ref = time.time()
         # write list of particles in each halo
-        if(H.dump_dms):
+        if(H.dump_members):
             mass_memb = mass_10[indexps]
             pos_memb = pos_10[indexps]
             vel_memb = vel_10[indexps]
@@ -783,7 +885,7 @@ def write_tree_brick_1d():
         f44.write_record(members)
         timerecord[ith]+=time.time()-ref; ith+=1; ref = time.time()
 
-        if(H.dump_dms):
+        if(H.dump_members):
             ncharg = f"{me['id']:07d}"
             nomfich = f"HAL_{nchar}/halo_dms_{ncharg}"
             f9 = FortranFile(nomfich, 'w')
@@ -854,7 +956,7 @@ def write_tree_brick_hdf():
     whereIam_idxs = mem['whereIam_idxs']
     whereIam_counts = mem['whereIam_counts']
     pids0_groupsorted = mem['pids0_groupsorted']
-    if H.dump_dms:
+    if H.dump_members:
         mass_10 = mem['mass_10']
         pos_10 = mem['pos_10']
         vel_10 = mem['vel_10']
@@ -922,7 +1024,7 @@ def write_tree_brick_hdf():
         finput.attrs['dcell_min']=H.dcell_min
         finput.attrs['eps_SC']=H.eps_SC
         finput.attrs['nsteps']=H.nsteps
-        finput.attrs['dump_dms']=H.dump_dms
+        finput.attrs['dump_members']=H.dump_members
         #---------------------------------
         # Catalog
         #---------------------------------
@@ -976,7 +1078,7 @@ def write_tree_brick_hdf():
         
         member_chunk = min(max(1, len(pids)), 65536)
         grp.create_dataset('pids', data=pids, compression='lzf', chunks=(member_chunk,))
-        if H.dump_dms:
+        if H.dump_members:
             grp.attrs['fields'] = 'pids,pos,vel,mass'
             pos_ds = grp.create_dataset(
                 'pos', shape=(len(pids), 3), dtype=pos_10.dtype,

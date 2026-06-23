@@ -5,6 +5,7 @@ import time, os
 import numpy as np
 from scipy.io import FortranFile
 from itertools import combinations
+from chem_species import CHEM_STAR_FIELDS
 from ssp_photometry import (
     BANDS, MODELS, interpolation_coordinates, interpolate_magnitude,
     load_all_tables,
@@ -1512,6 +1513,14 @@ def compute_stellar_1d(h:np.void, member=None):
 
         h['age'] = np.average(star_ages, weights=star_masses)
         h['metal'] = np.average(star_metals, weights=star_masses)
+        if H.allocated('chem_10'):
+            star_chem = mem['chem_10'][star_indices, :]
+            valid_weights = np.isfinite(star_masses) & (star_masses > 0)
+            for element_index, field in enumerate(CHEM_STAR_FIELDS):
+                values = star_chem[:, element_index]
+                valid = valid_weights & np.isfinite(values)
+                if np.any(valid):
+                    h[field] = np.average(values[valid], weights=star_masses[valid])
         inside_r50 = dr2 < h['r50']**2
         inside_r90 = dr2 < h['r90']**2
 
