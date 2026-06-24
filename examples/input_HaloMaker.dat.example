@@ -1,30 +1,30 @@
-af             =  1.000
+af             =  1.000   ! Today expansion factor == 1/(1+zi)
 # lbox, omega_f, and lambda_f are optional for RAMSES snapshots. If omitted,
 # the code reads the authoritative values from the RAMSES AMR header.
-# lbox         =  100.000
-H_f            =  70.000
-# omega_f      =  0.300
-# lambda_f     =  0.700
-npart          =  100
-method         =  MSM
+# lbox         =  142.04546 ! Size of the box at z=0 (NB: in Mpc! ==> 479 Mpc/h=684.286 Mpc)
+H_f            =  70.300  ! Hubble constant (in Km/s/Mpc) at z=0
+# omega_f      =  0.272  ! Omega matter at z=0 (ex: 0.3)
+# lambda_f     =  0.728  ! Omega lambda at z=0 (ex: 0.7)
+npart          =  100     ! Minimum number of particles per halo (ex:10)
+method         =  MSM     ! choose between FOF, HOP, MSM etc .. (view ReadMe for details).
 cdm            =  .false.
-b              =  0.2
-nvoisins       =  100
-nhop           =  100
-rhot           =  80.0
-fudge          =  4.
-fudgepsilon    =  0.001
-alphap         =  1.0
-verbose        =  .true.
-megaverbose    =  .false.
-nsteps         =  1
-FlagPeriod     =  1
-dump_members   =  .false.   ! write member pos/vel/mass (all members); legacy keys dump_DMs/dump_stars still accepted
-DPMMC          =  .false.
-SC             =  .true.
-dcell_min      =  0.001
-eps_SC         =  0.3
-dchmod         =  755
-fchmod         =  644
-uid            =  -1
-gid            =  -1
+b              =  0.2     ! fof parameter "b" (usually b=0.2)
+nvoisins       = 100      ! parameter for adaptahop (usually 20) Maximum Nparts per KDtree
+nhop           = 100      ! parameter for adaptahop (usually 20)
+rhot           =  80.0    ! parameter for adaptahop (80 coreespond to b = 0.2)
+fudge          = 4.       ! parameter for adaptahop (usually 4.) 
+fudgepsilon    = 0.001    ! parameter for adaptahop (usually 0.05)
+alphap         = 1.0      ! parameter for adaptahop (usually 1.)
+verbose        = .true.   ! verbose parameter for both halo finder
+megaverbose    = .false.  ! parameter for adaptahop
+nsteps         =  200     ! Number of time steps to analyse
+FlagPeriod     =  1       ! Periodic boundaries (1:True)
+dump_members   =  .false. ! write member pos/vel/mass (all members); legacy keys dump_DMs/dump_stars still accepted
+DPMMC          = .false.  ! Activate the densest point in the most massive cell
+SC             = .true.   ! Activate the com in concentric spheres
+dcell_min      = 0.001    ! smallest possible cell size in Mpc
+eps_SC         = 0.3      ! Reduction fraction of the concentric shpere radius (only used in finding halo center)
+dchmod         = 775      ! chmod for directories/scripts (Default: 755)
+fchmod         = 664      ! chmod for regular files (Default: 644)
+uid            = -1       ! change uid unless -1
+gid            = 20005    ! change gid unless -1
