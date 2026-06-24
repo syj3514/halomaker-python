@@ -173,10 +173,23 @@ def read_data_10():
     # then read name of snapshot, its type (pm, p3m, SN, Nzo, Gd), num of procs used and number of snapshot
     iscomment = True
     while iscomment:
-        name_of_file, H.simtype, H.nbPes, H.numstep = f12.readline().split()
-        # skip comment lines starting with # or !
-        if name_of_file[0] not in ['#', '!']:
-            iscomment = False
+        line = f12.readline()
+        if line == '':
+            raise ValueError(
+                "inputfiles_HaloMaker.dat: reached end of file without a snapshot "
+                "line (expected: '<dir>' <format> <nbPes> <numstep>)")
+        stripped = line.strip()
+        # skip blank lines and comments starting with # or ! (before unpacking)
+        if (not stripped) or stripped[0] in ['#', '!']:
+            continue
+        fields = stripped.split()
+        if len(fields) != 4:
+            raise ValueError(
+                "inputfiles_HaloMaker.dat: expected 4 fields "
+                "('<dir>' <format> <nbPes> <numstep>), got "
+                f"{len(fields)}: {stripped!r}")
+        name_of_file, H.simtype, H.nbPes, H.numstep = fields
+        iscomment = False
     H.nbPes = int(H.nbPes); H.numstep = int(H.numstep)
     if(name_of_file[0]=="'")or(name_of_file[0]=='"'):
         name_of_file = name_of_file[1:-1]
