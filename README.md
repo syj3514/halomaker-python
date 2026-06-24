@@ -2,12 +2,12 @@
 
 Python + Fortran implementation of HaloMaker / AdaptaHOP for RAMSES
 snapshots. The Fortran extensions provide the memory-sensitive neighbor and
-structure-tree routines. Both full-box and zoom-in workflows are included.
+structure-tree routines. The pipeline runs in **full-box** mode; the legacy
+zoom-in path has been removed.
 
 This release is staged from the dev3 memory-optimized implementation. The
-public filenames remain canonical (`compute_adaptahop.f90` and
-`compute_adaptahop_zoomin.f90`) so existing scripts do not need development
-branch names.
+public filename remains canonical (`compute_adaptahop.f90`) so existing scripts
+do not need development branch names.
 
 Compared with the local reference implementation used during development,
 dev3 reduced the peak RSS of the 39990 full-box test from about 104 GiB to
@@ -72,7 +72,6 @@ bash build.sh
 This creates:
 
 - `compute_adaptahop*.so`
-- `compute_adaptahop_zoomin*.so`
 
 Build and run from the same activated Python environment. If you do not want
 to activate the environment, pass the interpreter explicitly:
@@ -92,8 +91,9 @@ cp examples/inputfiles_HaloMaker.dat.example inputfiles_HaloMaker.dat
 ```
 
 Edit `inputfiles_HaloMaker.dat` so that each active line points to an existing
-RAMSES snapshot. Set `zoomin = .true.` in `input_HaloMaker.dat` for zoom-in
-processing and `zoomin = .false.` for periodic full-box processing.
+RAMSES snapshot. The pipeline runs in periodic full-box mode; the legacy
+zoom-in mode was removed, so a stray `zoomin` key in `input_HaloMaker.dat` is
+ignored.
 
 For RAMSES snapshots, `lbox`, `omega_f`, and `lambda_f` are optional. The code
 reads the authoritative box size and snapshot cosmology from the RAMSES AMR

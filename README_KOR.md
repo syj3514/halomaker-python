@@ -2,7 +2,7 @@
 
 RAMSES snapshot을 위한 HaloMaker / AdaptaHOP의 Python + Fortran 구현입니다.
 Fortran extension은 메모리 사용이 큰 neighbor 및 structure-tree 루틴을
-담당합니다. full-box와 zoom-in workflow를 모두 포함합니다.
+담당합니다. 파이프라인은 **full-box 전용**이며, 레거시 zoom-in 경로는 제거되었습니다.
 
 이 release는 dev3 memory-optimized 구현을 기준으로 준비되었습니다. 공개
 파일명은 기존 script가 development branch 이름에 의존하지 않도록 canonical
@@ -91,9 +91,9 @@ cp examples/inputfiles_HaloMaker.dat.example inputfiles_HaloMaker.dat
 ```
 
 `inputfiles_HaloMaker.dat`를 편집하여 각 active line이 실제 RAMSES snapshot을
-가리키도록 설정합니다. Zoom-in processing에는 `input_HaloMaker.dat`에서
-`zoomin = .true.`를 사용하고, periodic full-box processing에는
-`zoomin = .false.`를 사용합니다.
+가리키도록 설정합니다. 파이프라인은 periodic full-box 모드로 동작하며, 레거시
+zoom-in 모드는 제거되었으므로 `input_HaloMaker.dat`에 `zoomin` 키가 남아 있어도
+무시됩니다.
 
 RAMSES snapshot의 경우 `lbox`, `omega_f`, `lambda_f`는 optional입니다.
 Code는 `read_data()` 중 RAMSES AMR header에서 authoritative box size와

@@ -28,4 +28,3 @@ dchmod         =  755
 fchmod         =  644
 uid            =  -1
 gid            =  -1
-zoomin         =  .false.
