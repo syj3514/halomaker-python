@@ -35,10 +35,6 @@ def sphere_cell_mask(cells, center, radius, include_boundary=True):
     return distance <= radius
 
 
-def bounding_box(center, radius):
-    return np.column_stack((center - radius, center + radius))
-
-
 def periodic_boxes(center, radius):
     intervals = []
     for value in center:

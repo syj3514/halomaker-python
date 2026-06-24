@@ -172,6 +172,13 @@ Overlap-diagnostic field meanings:
 | Gas kinematics, `r90` | `vrot_gas_r90`, `sig3d_gas_r90`, `sigcyl_gas_r90` | km/s | stellar `r90` aperture |
 | Gas angular momentum | `Lx_gas`, `Ly_gas`, `Lz_gas` | `Msun Mpc km/s` | on `r*` |
 
+**Fixed physical definitions (not configurable):** the cold (`T < 10^4 K`) and
+dense (`T < 10^4 K` and `n_H > 5/cc`) thresholds, the spherical-overdensity
+contrasts (200× and 500× the critical density `ρ_crit`), and the 9-element
+chemistry set (`H, O, Fe, Mg, C, N, Si, S, D`, shared with the catalog `*_star`
+fields via `chem_species.py`) are fixed in source. Changing them is a
+schema/feature change, not a run-time option.
+
 ### 4.5 GasMaker Aperture Key
 
 | Field pattern | Aperture |
