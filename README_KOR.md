@@ -116,6 +116,14 @@ bash run.sh
 
 주요 HDF5 catalog output은 `tree_bricks*.h5`로 기록됩니다.
 
+### 병렬성 (`nbPes`)
+
+`inputfiles_HaloMaker.dat` 각 라인의 **3번째 필드가 `nbPes`** 로, Python 단계(입자 읽기·density·
+halo 속성)와 Fortran OpenMP 단계(이웃 탐색·mean density·saddle 연결·node tree) 양쪽의 worker
+프로세스/스레드 수를 정합니다. `nbPes`를 키우면 대부분 단계가 빨라지지만 전체 speedup은 **포화**합니다
+(1900만 입자 박스에서 32코어 기준 ≈12×): 구조 트리의 `create nodes` 단계가 현재 **직렬**이라
+`nbPes`에 비례하지 않으며, 대형 박스에서는 이 단계가 wall time을 지배합니다.
+
 ### 출력 단위 (breaking change: `halomaker_units_v2`)
 
 이제 catalog와 GasMaker 출력은 단일 단위계를 씁니다: **질량 `Msun`**, **위치/반경/

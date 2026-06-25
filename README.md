@@ -117,6 +117,16 @@ bash run.sh
 
 The main HDF5 catalog output is written as `tree_bricks*.h5`.
 
+### Parallelism (`nbPes`)
+
+The third field of each line in `inputfiles_HaloMaker.dat` is `nbPes`, the
+number of worker processes/threads used for both the Python stages (particle
+reading, density, halo properties) and the Fortran OpenMP stages (neighbor
+search, mean density, saddle connections, node tree). Larger `nbPes` speeds up
+most phases, but total speedup **saturates** (≈12× at 32 cores on a 19M-particle
+box): the `create nodes` step of the structure tree is currently serial and does
+not scale with `nbPes`, so it dominates wall time on very large boxes.
+
 ### Output units (breaking change: `halomaker_units_v2`)
 
 Catalog and GasMaker outputs now use one consistent unit system: **masses in
