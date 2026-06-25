@@ -1494,27 +1494,6 @@ def find_nearest_parts_13120(ipar1, poshere):
     dist2_0, iparnei = walk_tree_norec_131200(ipar1,poshere)
     return dist2_0, iparnei
 
-class quickt:
-    def __init__(self):
-        self.times={}
-        self.now=None
-        self.t0=0
-    def go(self, label):
-        self.label=label
-        if not label in self.times:
-            self.times[label] = 0.0
-        self.t0 = time.time()
-    def rec(self):
-        t1 = time.time()
-        self.times[self.label] += t1 - self.t0
-        self.t0 = time.time()
-    def report(self):
-        print(f"{print_prefix}Timing report for quickt:")
-        for label, t in self.times.items():
-            print(f"{print_prefix}  {label}: {t:.8f} seconds")
-        
-        
-
 def walk_tree_norec_131200(iparid1,poshere):
     '''
     Non-recursive version of walk_tree_131200.
@@ -2346,14 +2325,3 @@ def create_KDtree_13110(
 def remove_degenerate_particles():
 #=======================================================================
     raise NotImplementedError('remove_degenerate_particles is not implemented yet')
-
-
-#=======================================================================
-def convtoasc(number,sstring):
-#=======================================================================
-# To convert an integer(kind=4) smaller than 999999 to a 6 characters string
-#=======================================================================
-    sstring = f"{number:06d}"
-    return sstring
-
-#=======================================================================
