@@ -17,6 +17,157 @@ faulthandler.register(signal.SIGUSR1, file=sys.stderr, all_threads=True)
 
 UNITS_VERSION = "halomaker_units_v2"
 
+
+def _strip_quotes(value):
+    if len(value) >= 2 and value[0] in ("'", '"') and value[-1] == value[0]:
+        return value[1:-1]
+    return value
+
+
+def _sanitize_output_token(value):
+    token = "".join(ch if ch.isalnum() or ch in ("-", "_", ".") else "_" for ch in str(value))
+    token = token.strip("._")
+    return token or "snapshot"
+
+
+def _format_output_suffix(value):
+    if not value:
+        return ""
+    token = _sanitize_output_token(value)
+    return token if token.startswith("_") else f"_{token}"
+
+
+def _to_float64(value):
+    return np.float64(str(value).replace("D", "E").replace("d", "e"))
+
+
+def _source_tag_from_dir(path):
+    normalized = os.path.normpath(_strip_quotes(path))
+    parts = [part for part in normalized.split(os.sep) if part]
+    for part in reversed(parts):
+        if part.startswith("output_"):
+            continue
+        if part.lower() in ("snapshot", "snapshots", "output", "outputs"):
+            continue
+        if part:
+            return _sanitize_output_token(part)
+    return _sanitize_output_token(parts[-1] if parts else "snapshot")
+
+
+def _read_inputfiles_records(path):
+    records = []
+    with open(path, "r") as f12:
+        for lineno, line in enumerate(f12, start=1):
+            stripped = line.strip()
+            if (not stripped) or stripped[0] in ["#", "!"]:
+                continue
+            fields = stripped.split()
+            if len(fields) not in (4, 5):
+                raise ValueError(
+                    "inputfiles_HaloMaker.dat: expected 4 or 5 fields "
+                    "('<dir>' <format> <nbPes> <numstep> [prefix]), got "
+                    f"{len(fields)} on line {lineno}: {stripped!r}")
+            name_of_file, simtype, nbPes, numstep = fields[:4]
+            line_prefix = fields[4] if len(fields) == 5 else ""
+            records.append({
+                "line_no": lineno,
+                "name_of_file": _strip_quotes(name_of_file),
+                "simtype": simtype,
+                "nbPes": int(nbPes),
+                "numstep": int(numstep),
+                "line_prefix": line_prefix,
+            })
+    if not records:
+        raise ValueError(
+            "inputfiles_HaloMaker.dat: reached end of file without a snapshot "
+            "line (expected: '<dir>' <format> <nbPes> <numstep> [prefix])")
+    return records
+
+
+def _prepare_inputfiles_metadata(path):
+    records = _read_inputfiles_records(path)
+    base_counts = {}
+    source_counts = {}
+    for record in records:
+        base = f"{int(record['numstep']):05d}"
+        base_counts[base] = base_counts.get(base, 0) + 1
+        source_tag = _source_tag_from_dir(record["name_of_file"])
+        record["source_tag"] = source_tag
+        source_key = (base, source_tag)
+        source_counts[source_key] = source_counts.get(source_key, 0) + 1
+
+    seen_source = {}
+    for idx, record in enumerate(records, start=1):
+        base = f"{int(record['numstep']):05d}"
+        line_prefix = record["line_prefix"]
+        if line_prefix:
+            tag = line_prefix
+            reason = "line_prefix"
+        elif base_counts[base] > 1:
+            source_tag = record["source_tag"]
+            source_key = (base, source_tag)
+            seen_source[source_key] = seen_source.get(source_key, 0) + 1
+            if source_counts[source_key] > 1:
+                tag = f"{source_tag}_L{idx}"
+            else:
+                tag = source_tag
+            reason = "auto_collision"
+        else:
+            tag = ""
+            reason = "legacy"
+        record["output_suffix"] = _format_output_suffix(tag)
+        record["output_tag"] = tag
+        record["output_tag_reason"] = reason
+    return records
+
+
+def _read_ramses_info_params(path):
+    params = {}
+    with open(path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            name, value = map(str.strip, line.split("=", 1))
+            if "!" in value:
+                value = value.split("!")[0].strip()
+            if name in ("unit_l", "scale_l"):
+                params["scale_l"] = _to_float64(value)
+            elif name in ("unit_d", "scale_d"):
+                params["scale_d"] = _to_float64(value)
+            elif name in ("unit_t", "scale_t"):
+                params["scale_t"] = _to_float64(value)
+            elif name == "H0":
+                params["H0"] = _to_float64(value)
+    return params
+
+
+def _apply_info_h0(info_params, rtol=np.float64(1e-6)):
+    config_hf = np.float64(getattr(H, "config_H_f", H.H_f))
+    if "H0" not in info_params:
+        H.info_H0 = np.nan
+        H.H_f = config_hf
+        H.H_f_source = "config_fallback"
+        return
+    info_h0 = info_params["H0"]
+    H.info_H0 = info_h0
+    if np.isclose(config_hf, info_h0, rtol=rtol, atol=np.float64(0.0)):
+        H.H_f = config_hf
+        H.H_f_source = "config_equivalent_info"
+        return
+    H.H_f = info_h0
+    H.H_f_source = "info_H0"
+
+
+def _tree_brick_filename(nchar, hdf=False):
+    suffix = getattr(H, "output_suffix", "")
+    ext = ".h5" if hdf else ""
+    if not H.fsub:
+        stem = f"tree_brick_{nchar}"
+    else:
+        stem = f"tree_bricks{nchar}"
+    return f"{H.output_dir}/{stem}{H.prefix}{suffix}{ext}"
+
 CATALOG_FIELD_UNITS = {
     "id": "int",
     "timestep": "int",
@@ -167,43 +318,39 @@ def read_data_10():
 
     if(H.numero_step == 1):
        print(f"> output_dir: `{H.output_dir}`")
+       H.config_H_f = np.float64(H.H_f)
        # contains the number of snapshots to analyze and their names, type and number (see below)
-       f12 = open('inputfiles_HaloMaker.dat','r')
+       H._inputfiles_records = _prepare_inputfiles_metadata('inputfiles_HaloMaker.dat')
 
     # then read name of snapshot, its type (pm, p3m, SN, Nzo, Gd), num of procs used and number of snapshot
-    iscomment = True
-    while iscomment:
-        line = f12.readline()
-        if line == '':
-            raise ValueError(
-                "inputfiles_HaloMaker.dat: reached end of file without a snapshot "
-                "line (expected: '<dir>' <format> <nbPes> <numstep>)")
-        stripped = line.strip()
-        # skip blank lines and comments starting with # or ! (before unpacking)
-        if (not stripped) or stripped[0] in ['#', '!']:
-            continue
-        fields = stripped.split()
-        if len(fields) != 4:
-            raise ValueError(
-                "inputfiles_HaloMaker.dat: expected 4 fields "
-                "('<dir>' <format> <nbPes> <numstep>), got "
-                f"{len(fields)}: {stripped!r}")
-        name_of_file, H.simtype, H.nbPes, H.numstep = fields
-        iscomment = False
-    H.nbPes = int(H.nbPes); H.numstep = int(H.numstep)
-    if(name_of_file[0]=="'")or(name_of_file[0]=='"'):
-        name_of_file = name_of_file[1:-1]
+    try:
+        record = H._inputfiles_records[H.numero_step - 1]
+    except (AttributeError, IndexError) as exc:
+        raise ValueError(
+            "inputfiles_HaloMaker.dat: number of valid snapshot lines is smaller "
+            f"than nsteps={H.nsteps}") from exc
+    name_of_file = record["name_of_file"]
+    H.simtype = record["simtype"]
+    H.nbPes = int(record["nbPes"])
+    H.numstep = int(record["numstep"])
+    H.line_prefix = record["line_prefix"]
+    H.output_suffix = record["output_suffix"]
+    H.output_tag = record["output_tag"]
+    H.output_tag_reason = record["output_tag_reason"]
     H.file_num = f"{int(H.numstep):05d}"
     if(name_of_file[0] != '/'):
         name_of_file = f'{H.output_dir}/{name_of_file}'
+    H.snapshot_dir = name_of_file
     print(f"name_of_file: `{name_of_file}`")
+    if H.output_suffix:
+        print(
+            f"> output disambiguation suffix: `{H.output_suffix}` "
+            f"({H.output_tag_reason})")
 
     # Note 1: old treecode SNAP format has to be converted [using SNAP_to_SIMPLE (on T3E)] 
     #     into new treecode SIMPLE (SN) format.
     # Note 2: of the five format (pm, p3m, SN, Nzo, Gd) listed above, only  SN, Nzo and Gd 
     #     are fully tested so the code stops for pm and p3m
-
-    if(H.numero_step == H.nsteps): f12.close()
 
     if(H.simtype=='SN'): raise NotImplementedError("`SN` format is not implemented yet")
 
@@ -276,6 +423,10 @@ def read_ramses_100(repository):
         omega_m,omega_l,omega_k,omega_b = f.read_reals()
         # to get units cgs multiply by these scale factors
         scale_l,scale_d,scale_t = f.read_reals()
+    info_path = f"{repository}/info_{nchar}.txt"
+    if os.path.exists(info_path):
+        info_params = _read_ramses_info_params(info_path)
+        _apply_info_h0(info_params)
     # use approximate comv from cm to Mpc to match Romain's conversion... 
     H.Lboxp          = boxlen*scale_l/3.08e24/aexp_ram # converts cgs to Mpc comoving
     #write(errunit,*) 'af,hf,lboxp,ai,aexp',af,h_f,lboxp,ai,aexp_ram
@@ -623,27 +774,14 @@ def read_ramses_new_101(repository, rver='Ra3'):
     if(H.verbose): print(f"\t|>     omega_m={omega_m:.3f}, omega_l={omega_l:.3f}, omega_k={omega_k:.3f}, omega_b={omega_b:.3f}")
 
     nomfich = f"{repository}/info_{nchar}.txt"
-    with open(nomfich, 'r') as f:
-        for line in f:
-            line = line.strip()  # Remove leading and trailing whitespace
-            if not line or line.startswith('#'):
-                continue  # Skip empty lines and lines starting with '#'
-
-            # Split the line at the '=' character
-            name, value = map(str.strip, line.split('='))
-
-            # Check for a comment at the end of the value
-            if '!' in value:
-                value = value.split('!')[0].strip()
-
-            # Process the name and value
-            if name in ('unit_l', 'scale_l'):
-                scale_l = np.float64(value)
-            elif name in ('unit_d', 'scale_d'):
-                scale_d = np.float64(value)
-            elif name in ('unit_t', 'scale_t'):
-                scale_t = np.float64(value)
-                break
+    info_params = _read_ramses_info_params(nomfich)
+    if "scale_l" in info_params:
+        scale_l = info_params["scale_l"]
+    if "scale_d" in info_params:
+        scale_d = info_params["scale_d"]
+    if "scale_t" in info_params:
+        scale_t = info_params["scale_t"]
+    _apply_info_h0(info_params)
 
     H.Lboxp          = boxlen*scale_l/np.float64(3.08e24)/aexp_ram # converts cgs to Mpc comoving
     H.aexp           = aexp_ram*H.af  
@@ -855,10 +993,7 @@ def write_tree_brick_1d():
         pos_10 = mem['pos_10']
         vel_10 = mem['vel_10']
 
-    if(not H.fsub):
-        filename = f"{H.output_dir}/tree_brick_{nchar}{H.prefix}"
-    else:
-        filename = f"{H.output_dir}/tree_bricks{nchar}{H.prefix}"
+    filename = _tree_brick_filename(nchar, hdf=False)
     f44 = FortranFile(filename, 'w')
     print()
     print('> Output data to build halo merger tree to: ',filename)
@@ -974,10 +1109,7 @@ def write_tree_brick_hdf():
         pos_10 = mem['pos_10']
         vel_10 = mem['vel_10']
 
-    if(not H.fsub):
-        filename = f"{H.output_dir}/tree_brick_{nchar}{H.prefix}.h5"
-    else:
-        filename = f"{H.output_dir}/tree_bricks{nchar}{H.prefix}.h5"
+    filename = _tree_brick_filename(nchar, hdf=True)
     # f44 = FortranFile(filename, 'w')
     print()
     print('> Output data to build halo merger tree to: ',filename)
@@ -1002,6 +1134,13 @@ def write_tree_brick_hdf():
         header.attrs['units_version'] = UNITS_VERSION
         header.attrs['hubble']=H.hubble
         header.attrs['mboxp']=H.mboxp
+        header.attrs['snapshot_dir'] = getattr(H, 'snapshot_dir', '')
+        header.attrs['numstep'] = H.numstep
+        header.attrs['output_suffix'] = getattr(H, 'output_suffix', '')
+        header.attrs['output_tag'] = getattr(H, 'output_tag', '')
+        header.attrs['output_tag_reason'] = getattr(H, 'output_tag_reason', 'legacy')
+        header.attrs['info_H0'] = getattr(H, 'info_H0', np.nan)
+        header.attrs['H_f_source'] = getattr(H, 'H_f_source', 'config_fallback')
         # HaloMaker data
         header.attrs['nb_of_halos'] = H.nb_of_halos
         header.attrs['nb_of_subhalos'] = H.nb_of_subhalos
@@ -1019,6 +1158,12 @@ def write_tree_brick_hdf():
         finput.attrs['af']=H.af
         finput.attrs['Lf']=H.Lf
         finput.attrs['H_f']=H.H_f
+        finput.attrs['snapshot_dir'] = getattr(H, 'snapshot_dir', '')
+        finput.attrs['numstep'] = H.numstep
+        finput.attrs['line_prefix'] = getattr(H, 'line_prefix', '')
+        finput.attrs['output_suffix'] = getattr(H, 'output_suffix', '')
+        finput.attrs['info_H0'] = getattr(H, 'info_H0', np.nan)
+        finput.attrs['H_f_source'] = getattr(H, 'H_f_source', 'config_fallback')
         finput.attrs['FlagPeriod']=H.FlagPeriod
         finput.attrs['nMembers']=H.nMembers
         finput.attrs['cdm']=H.cdm
