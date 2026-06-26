@@ -12,7 +12,7 @@ the new gas post-processor built on top of it.
 
 ---
 
-## 🛰 GasMaker — new gas post-processor  **[prototype]**
+## 🛰 GasMaker — new gas post-processor  **[released]**
 
 A brand-new tool that reads an existing halo/galaxy catalog plus the RAMSES
 AMR/hydro data and computes **gas properties per halo and galaxy** that
@@ -79,6 +79,17 @@ The member-dump flag is renamed to `dump_members` because it writes pos/vel/mass
 for **all** members (DM + stars), not just DM. The dormant GalaxyMaker-era
 `dump_stars` placeholder is retired. Legacy keys `dump_DMs` and `dump_stars` are
 still accepted as aliases, so existing input files keep working.
+
+### Per-snapshot `H_f` + collision-safe chaining  **[released]**
+You can now chain several snapshots — even from **different simulations** — in one
+`inputfiles_HaloMaker.dat`. Each snapshot reads its own `H0` from `info_*.txt`:
+the config `H_f` is kept when it matches within `rtol=1e-6` (so existing goldens
+are untouched) and overridden when a chained simulation genuinely differs
+(recorded as `H_f_source`/`info_H0` in the output header). When chained snapshots
+share an output number, filenames are auto-disambiguated
+(`tree_bricks{n}_{tag}.h5`) so none are overwritten; an optional 5th `inputfiles`
+field sets an explicit per-line prefix. A latent Fortran multi-step state bug
+(`already allocated` on the 2nd snapshot) was fixed so chains actually complete.
 
 ### Full-box is now the single, clean mode  **[released]**
 The legacy zoom-in code path has been fully removed (Python paths **and** the
@@ -227,10 +238,12 @@ extending the pipeline:
   `initial_mass` relative to `metallicity` in `part_file_descriptor.txt`; a
   simulation with a different descriptor order must be verified (the code errors
   out on an unsupported order rather than guessing).
-- **Cosmology from the RAMSES header is overwritten, but `H_f` stays an input
-  value.** Mixing simulations with different Hubble parameters in one input list
-  (or reusing the same output number across simulations) can produce wrong
-  cosmology state or output-filename collisions.
+- **Exact bit-reproducibility is not guaranteed across runs/platforms.** Parallel
+  reductions (multiprocessing + Fortran OpenMP) are non-associative, and a handful
+  of *marginal* halos sit right at the virial shell-crossing threshold, so their
+  virial/energy/shape fields can flip between otherwise-identical runs. These stay
+  within the field-policy tolerance (`real_regression=0`); the policy gate, not a
+  raw byte/SHA diff, is the regression criterion.
 - **Exact ties.** Pathological snapshots with many equal-density / equal-distance
   ties can make the deterministic ordering assumption fragile (the code logs a
   warning); compare membership first in that case.

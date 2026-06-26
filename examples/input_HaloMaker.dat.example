@@ -1,8 +1,10 @@
 af             =  1.000   ! Today expansion factor == 1/(1+zi)
-# lbox, omega_f, and lambda_f are optional for RAMSES snapshots. If omitted,
-# the code reads the authoritative values from the RAMSES AMR header.
+# lbox, omega_f, lambda_f, and H_f are optional for RAMSES snapshots: the code
+# reads authoritative box size and cosmology (incl. H0) from the RAMSES
+# header/info per snapshot. A config H_f is kept when it matches the snapshot's
+# H0 within rtol=1e-6, else the snapshot's H0 is used (chaining different sims).
 # lbox         =  142.04546 ! Size of the box at z=0 (NB: in Mpc! ==> 479 Mpc/h=684.286 Mpc)
-H_f            =  70.300  ! Hubble constant (in Km/s/Mpc) at z=0
+H_f            =  70.300  ! Hubble constant (in Km/s/Mpc) at z=0 (optional; see note above)
 # omega_f      =  0.272  ! Omega matter at z=0 (ex: 0.3)
 # lambda_f     =  0.728  ! Omega lambda at z=0 (ex: 0.7)
 npart          =  100     ! Minimum number of particles per halo (ex:10)
