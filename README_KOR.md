@@ -91,14 +91,23 @@ cp examples/inputfiles_HaloMaker.dat.example inputfiles_HaloMaker.dat
 ```
 
 `inputfiles_HaloMaker.dat`를 편집하여 각 active line이 실제 RAMSES snapshot을
-가리키도록 설정합니다. 파이프라인은 periodic full-box 모드로 동작하며, 레거시
-zoom-in 모드는 제거되었으므로 `input_HaloMaker.dat`에 `zoomin` 키가 남아 있어도
-무시됩니다.
+가리키도록 설정합니다. 각 line은 `'<snapshot dir>' <format> <worker count>
+<output number> [prefix]` 형식이며 5번째 `prefix`는 선택입니다. line은 순서대로
+처리되므로 여러 snapshot(다른 시뮬레이션이라도)을 한 run에서 체이닝할 수 있습니다.
+파이프라인은 periodic full-box 모드로 동작하며, 레거시 zoom-in 모드는 제거되었으므로
+`input_HaloMaker.dat`에 `zoomin` 키가 남아 있어도 무시됩니다.
 
-RAMSES snapshot의 경우 `lbox`, `omega_f`, `lambda_f`는 optional입니다.
-Code는 `read_data()` 중 RAMSES AMR header에서 authoritative box size와
-snapshot cosmology를 읽습니다. 이 값들이 생략된 경우 box-size-dependent 및
-cosmology-dependent quantity는 snapshot header를 읽은 뒤 확정됩니다.
+RAMSES snapshot의 경우 `lbox`, `omega_f`, `lambda_f`, `H_f`는 `read_data()` 중
+RAMSES header/`info_*.txt`에서 **snapshot별로** 읽으므로 `input_HaloMaker.dat`에서
+optional입니다. `H_f`는 config 값이 snapshot의 `H0`와 `rtol=1e-6` 내로 일치하면
+config 값을, 아니면 snapshot의 authoritative `H0`를 사용합니다(출력 header에
+`H_f_source`/`info_H0`로 기록) — 덕분에 한 run에서 `H0`가 다른 시뮬레이션도
+체이닝할 수 있습니다. config 값이 생략되면 box-size·cosmology 의존 quantity는
+snapshot header를 읽은 뒤 확정됩니다.
+
+체이닝한 snapshot들이 output number를 공유하면 출력 파일명이 자동으로
+구분됩니다(`tree_bricks{n}_{tag}.h5`) — 덮어쓰기 없음. 단일 snapshot은 기존
+`tree_bricks{n:05d}.h5` 이름을 유지합니다.
 
 권장 print level은 다음과 같습니다.
 

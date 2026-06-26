@@ -91,15 +91,25 @@ cp examples/inputfiles_HaloMaker.dat.example inputfiles_HaloMaker.dat
 ```
 
 Edit `inputfiles_HaloMaker.dat` so that each active line points to an existing
-RAMSES snapshot. The pipeline runs in periodic full-box mode; the legacy
+RAMSES snapshot. Each line is `'<snapshot dir>' <format> <worker count>
+<output number> [prefix]`; the 5th `prefix` field is optional. Lines are
+processed in order, so several snapshots (even from different simulations) can
+be chained in one run. The pipeline runs in periodic full-box mode; the legacy
 zoom-in mode was removed, so a stray `zoomin` key in `input_HaloMaker.dat` is
 ignored.
 
-For RAMSES snapshots, `lbox`, `omega_f`, and `lambda_f` are optional. The code
-reads the authoritative box size and snapshot cosmology from the RAMSES AMR
-header during `read_data()`. If those values are omitted, box-size-dependent
-and cosmology-dependent quantities are finalized only after the snapshot header
-is read.
+For RAMSES snapshots, `lbox`, `omega_f`, `lambda_f`, and `H_f` are read
+per-snapshot from the RAMSES header/`info_*.txt` during `read_data()`, so they
+are optional in `input_HaloMaker.dat`. `H_f` honours the config value when it
+matches the snapshot's `H0` to within `rtol=1e-6` and otherwise uses the
+snapshot's authoritative `H0` (recorded as `H_f_source`/`info_H0` in the output
+header) — this lets a single run chain simulations with different `H0`. If
+config values are omitted, box-size- and cosmology-dependent quantities are
+finalized only after the snapshot header is read.
+
+When chained snapshots share an output number, output filenames are
+auto-disambiguated (`tree_bricks{n}_{tag}.h5`) so none are overwritten; a single
+snapshot keeps the plain `tree_bricks{n:05d}.h5` name.
 
 Recommended print levels:
 

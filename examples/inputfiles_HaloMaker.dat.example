@@ -1,3 +1,7 @@
-# Format:
-# '<RAMSES snapshot directory>'  <format>  <worker count>  <output number>
+# Format (one line per snapshot; processed in order):
+# '<RAMSES snapshot directory>'  <format>  <worker count>  <output number>  [prefix]
+# The 5th field [prefix] is optional and, if given, is always appended to the
+# output filename. When chaining snapshots whose output numbers collide, the
+# output name is auto-disambiguated (source-dir tag, then line index) so nothing
+# is overwritten. Lines beginning with # or ! and blank lines are ignored.
 '/path/to/ramses/output_00001/'  Ra3  8  00001

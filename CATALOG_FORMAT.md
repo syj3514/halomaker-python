@@ -51,6 +51,18 @@ feature/validation context.
 | `/header` | attrs/group | N/A | run, box, cosmology, count metadata |
 | `/input` | group | N/A | input configuration snapshot |
 
+**Per-snapshot cosmology provenance** (`/header` and `/input` attrs): `H_f` is the
+effective Hubble constant used for this snapshot; `info_H0` is the `H0` read from the
+snapshot's `info_*.txt`; `H_f_source` records how `H_f` was set — `info_H0` (the
+snapshot's authoritative H0, used when it differs materially from the config value,
+`rtol>1e-6`), `config_equivalent_info` (config kept because it matches `info_H0`
+within `rtol=1e-6`), or `config_fallback` (no `H0` in the header). `snapshot_dir`
+records the source directory. When several snapshots are processed in one run and
+their `numstep` labels collide, the output filename is disambiguated as
+`tree_bricks{numstep}_{tag}.h5` (source-dir tag, then `_L{n}` line index); a single
+snapshot keeps the plain `tree_bricks{numstep:05d}.h5` name. An optional 5th
+`inputfiles` field sets an explicit per-line prefix that is always appended.
+
 ### 3.2 `/catalog/halo` Field Groups
 
 The source document describes `/catalog/halo` as an 81-field structured table.
