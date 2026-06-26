@@ -495,7 +495,6 @@ def new_step_1():
 
     if(H.verbose): print(f"\n$$ Write tree_bricks...", flush=True)
     _ref = time.time()
-    # write_tree_brick_1d()
     write_tree_brick_hdf()
     if(H.verbose): print(f"\n$$ Write tree_bricks done ({time.time()-_ref:.2f} sec)", flush=True)
     timereport.append(('- write_tree_bricks', time.time()-_ref))
