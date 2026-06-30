@@ -200,7 +200,14 @@ python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all
 
 The output defaults to `gas_bricks{iout:05d}.h5` (override with `--output`). It
 is row-aligned with the catalog and joined by `id`; see **`CATALOG_FORMAT.md`**
-for the full field list of both outputs.
+for the full field list of both outputs. The fixed physical thresholds (cold
+`T<10⁴ K`, dense `n_H>5/cc`, spherical overdensities `200`/`500 ρ_crit`) are
+recorded in the output `/header` for provenance.
+
+GasMaker writes its output one root at a time, which trips HDF5's file locking on
+some network/parallel filesystems (Lustre/NFS) with `BlockingIOError [errno 11]`.
+Since GasMaker is the sole writer, it sets `HDF5_USE_FILE_LOCKING=FALSE` by
+default (safe); export that variable yourself to override.
 
 Snapshot reading is **pluggable**. The default reader (`gasmaker/readers/rur.py`)
 uses the `rur` package and is imported **lazily** — the GasMaker core does not

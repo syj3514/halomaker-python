@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 import argparse
+import os
 from pathlib import Path
+
+# HDF5 file locking fails (errno 11, "Resource temporarily unavailable") on some
+# network/parallel filesystems (Lustre/NFS). GasMaker is the sole writer of its
+# output file, so disabling the lock is safe; must be set before any h5py import.
+# Export HDF5_USE_FILE_LOCKING to override.
+os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
 from gasmaker import GasMaker
 # The rur adapter is the default snapshot reader. It is imported lazily (and

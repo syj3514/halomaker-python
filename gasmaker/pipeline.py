@@ -771,6 +771,10 @@ class GasMaker:
         header.attrs["overlap_depth"] = self.overlap_depth
         header.attrs["overlap_tolerance"] = self.overlap_tolerance
         header.attrs["ownership"] = "inclusive"
+        # Fixed physical thresholds (source-defined; recorded here for provenance)
+        header.attrs["cold_temperature_K"] = 1.0e4
+        header.attrs["dense_nH_per_cc"] = 5.0
+        header.attrs["so_overdensities_x_rhocrit"] = np.asarray([200.0, 500.0])
         header.attrs["run_mode"] = run_mode
         header.attrs["requested_root_ids"] = np.asarray(
             requested_root_ids, dtype=np.int32
