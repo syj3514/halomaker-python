@@ -74,9 +74,9 @@ Repository metadata not copied:
 ## 3. New Files Added
 
 - `README.md`: installation, build, configuration, and run instructions
-- `pyproject.toml`: minimal runtime package metadata
-- `requirements.txt`: minimal runtime dependency list
-- `environment.yml`: optional conda environment definition
+- `pyproject.toml`: package metadata + the single source of runtime dependencies
+- `environment.yml`: optional conda environment (installs the project via `pip -e .`,
+  so it inherits `pyproject.toml` dependencies)
 - `.gitignore`: generated-output exclusions
 - `build.sh`: reproducible f2py build for the two final Fortran modules
 - `run.sh`: minimal execution wrapper

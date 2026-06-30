@@ -22,9 +22,11 @@ ssp-generation = [
 ]
 
 [tool.setuptools]
-packages = ["halomaker_data", "halomaker_data.ssp_tables"]
+packages = ["halomaker_data", "halomaker_data.ssp_tables", "gasmaker", "gasmaker.readers"]
 py-modules = [
     "HaloMaker",
+    "GasMaker",
+    "chem_species",
     "compute_halo_props",
     "compute_neiKDtree_mod",
     "halo_defs",
