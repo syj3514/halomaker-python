@@ -62,6 +62,9 @@ their `numstep` labels collide, the output filename is disambiguated as
 `tree_bricks{numstep}_{tag}.h5` (source-dir tag, then `_L{n}` line index); a single
 snapshot keeps the plain `tree_bricks{numstep:05d}.h5` name. An optional 5th
 `inputfiles` field sets an explicit per-line prefix that is always appended.
+Catalogs frozen before these fields were introduced (the 07206 and NH2 golden
+references) predate `info_H0` / `H_f_source` / `snapshot_dir` and do not carry
+them by construction; the 39990 golden and all current-line output do.
 
 ### 3.2 `/catalog/halo` Field Groups
 
