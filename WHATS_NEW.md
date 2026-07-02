@@ -186,6 +186,19 @@ everything above:
 - **No import-time side effects** — importing the neighbor-tree module no longer
   spawns a multiprocessing manager process, fixing a portability hazard in
   sandboxed environments (and a small startup cost).
+- **`create nodes` scaling ceiling — characterized, not a bug.** The structure-tree
+  `create nodes` step does not speed up with more threads (≈1.0× from 1→32 cores)
+  and dominates very large runs. A competitive parallelization effort plus direct
+  per-halo profiling pinned the cause: the node tree is built by a **sequential
+  density-percolation of the most massive structure** (each threshold level depends
+  on the previous level's survivors — a data-dependency chain), and on 07206 the
+  single largest halo is **~69% of the step** (top two ~88%). This caps any
+  parallel speedup that preserves the exact output at **≈1.45×**, and it is also
+  the origin of the run-to-run marginal-structure non-determinism noted below.
+  Genuinely accelerating it needs an output-changing algorithm change (incremental
+  aggregation, or a parallel merge-tree reformulation) — deferred as a future
+  `create_optimized_nodes`, built alongside the current path, when very large runs
+  make it worthwhile.
 
 ---
 
@@ -253,13 +266,25 @@ extending the pipeline:
 ---
 
 ## 📋 In progress / next
-- All-root RUR scientific validation of GasMaker (Tier 1 + Tier 2). *Done at the
-  stratified-sample level (machine-precision PASS); full all-root is the
-  remaining optional cap.*
+- ~~All-root RUR scientific validation of GasMaker (Tier 1 + Tier 2).~~ **Done** —
+  validated across all top-level roots; high-mass and dense-gas fields agree at
+  machine precision, and a low-mass diffuse-gas divergence was traced to a
+  cell-boundary selection difference (GasMaker fractional overlap vs RUR
+  center-binary) and documented as accepted (`CATALOG_FORMAT.md` §6).
 - ~~Folding the validated GasMaker prototype into the release tree.~~ **Done** —
-  GasMaker is now a first-class release tool (`GasMaker.py` + `gasmaker/`).
+  GasMaker is now a first-class release tool (`GasMaker.py` + `gasmaker/`), and
+  release packaging now ships `gasmaker`, `chem_species`, and `GasMaker.py`.
 - ~~Stabilize the DM-profile inner-slope fit (`inslope`) against platform/compiler
   floating-point drift.~~ **Done** — roundoff-degenerate shells are now dropped
   from the fit; the residual is within the field-policy tolerance, so the frozen
   goldens were not re-frozen.
-- Streaming/chunked verification harness for very large runs (npart > 10⁹).
+- ~~Remove the `create nodes` serial bottleneck by parallelizing it.~~ **Closed as
+  a measured negative result** (see the Performance section) — the ceiling is
+  algorithmic, so no same-output parallelization helps; a future output-changing
+  rewrite (`create_optimized_nodes`) is noted for when very large runs need it.
+- Streaming/chunked verification harness for very large runs (npart > 10⁹) —
+  *withdrawn* for now (current machines have ≥300 GB RAM); revive for larger sims
+  or smaller-memory hosts.
+- Virial potential-energy profile refinement (`W(<r)` per-shell radius scaling) —
+  candidate science task; changes `rvir`/`mvir`/energy fields, so it needs golden
+  re-validation.

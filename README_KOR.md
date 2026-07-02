@@ -130,8 +130,11 @@ bash run.sh
 `inputfiles_HaloMaker.dat` 각 라인의 **3번째 필드가 `nbPes`** 로, Python 단계(입자 읽기·density·
 halo 속성)와 Fortran OpenMP 단계(이웃 탐색·mean density·saddle 연결·node tree) 양쪽의 worker
 프로세스/스레드 수를 정합니다. `nbPes`를 키우면 대부분 단계가 빨라지지만 전체 speedup은 **포화**합니다
-(1900만 입자 박스에서 32코어 기준 ≈12×): 구조 트리의 `create nodes` 단계가 현재 **직렬**이라
-`nbPes`에 비례하지 않으며, 대형 박스에서는 이 단계가 wall time을 지배합니다.
+(1900만 입자 박스에서 32코어 기준 ≈12×): 구조 트리의 `create nodes` 단계가 사실상 **직렬**이라
+`nbPes`에 비례하지 않으며, 대형 박스에서는 이 단계가 wall time을 지배합니다. 이는 튜닝 문제가 아니라
+**알고리즘적 한계**입니다 — 노드 트리는 가장 무거운 구조의 순차적 밀도-percolation(데이터 의존성 사슬)으로
+만들어지고, 07206 박스에서는 **단일 최대 헤일로 하나가 이 단계의 ~69%**라 출력을 보존하는 병렬 speedup
+상한이 ≈1.45×입니다. 이를 줄이려면 스레드가 아니라 **출력을 바꾸는 알고리즘 변경**이 필요합니다(프로젝트 노트 참조).
 
 ### 출력 단위 (breaking change: `halomaker_units_v2`)
 

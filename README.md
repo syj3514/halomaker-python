@@ -134,8 +134,13 @@ number of worker processes/threads used for both the Python stages (particle
 reading, density, halo properties) and the Fortran OpenMP stages (neighbor
 search, mean density, saddle connections, node tree). Larger `nbPes` speeds up
 most phases, but total speedup **saturates** (≈12× at 32 cores on a 19M-particle
-box): the `create nodes` step of the structure tree is currently serial and does
-not scale with `nbPes`, so it dominates wall time on very large boxes.
+box): the `create nodes` step of the structure tree is effectively serial and does
+not scale with `nbPes`, so it dominates wall time on very large boxes. This is an
+algorithmic limit, not a tuning gap — the node tree is built by a sequential
+density-percolation of the most massive structure (a data-dependency chain), and
+on the 07206 box the single largest halo alone is ~69% of that step, capping any
+same-output parallel speedup at ≈1.45×. Reducing it requires an output-changing
+algorithm change (see project notes), not more threads.
 
 ### Output units (breaking change: `halomaker_units_v2`)
 
