@@ -917,7 +917,6 @@ def tab_props_inside_1b40(h:np.void,nr:int,v, member=None):
     '''
     tabm2_o0 = np.zeros(nr); tabk2_o0 = np.zeros(nr)
     epsilon = 1e-2
-    from num_rec import rf
     count, _, ipos, ivel, imass, _ = member
 
     # rescale to get ellipsoid  concentric to principal ellipsoid
@@ -965,13 +964,107 @@ def tab_props_inside_1b40(h:np.void,nr:int,v, member=None):
 
     np.cumsum(tabm2_o0, out=tabm2_o0)
     np.cumsum(tabk2_o0, out=tabk2_o0)
-    # approximation based on appendix B of paper GALICS 1:
-    # better than 10-15 . accuracy on average
-    tabp2_o0 = -3/5 * H.gravconst * tabm2_o0**2 * rf(h['sha']**2,h['shb']**2,h['shc']**2)
-
-    # correct potential energy estimate for small halos which are calculated by direct summation 
-    if (h['ep'] != tabp2_o0[nr-1]): tabp2_o0 = tabp2_o0/tabp2_o0[nr-1]*h['ep']
+    tabp2_o0 = potential_profile_1b40(
+        h,
+        tabm2_o0,
+        amax,
+        bmax,
+        cmax,
+        count=count,
+        shell_counts=np.bincount(i_ells, minlength=nr),
+    )
     return tabm2_o0,tabk2_o0,tabp2_o0,amax,bmax,cmax
+
+#***********************************************************************
+
+def _virial_pe_profile_mode():
+    return getattr(H, 'virial_pe_profile', 'shell')
+
+#***********************************************************************
+
+def _virial_pe_norm_policy():
+    return getattr(H, 'virial_pe_norm_policy', 'profile_outer_for_large')
+
+#***********************************************************************
+
+def _virial_shell_self_mode():
+    return getattr(H, 'virial_shell_self_mode', 'count')
+
+#***********************************************************************
+
+def _direct_pe_particle_limit():
+    return getattr(H, 'virial_direct_pe_nmax', 1000)
+
+#***********************************************************************
+
+def _shell_scale(nr):
+    scale = np.arange(nr, dtype=np.float64) / np.float64(nr - 1)
+    # The innermost cumulative bin has zero boundary radius.  Use the shell
+    # midpoint so A/C profiles stay finite while preserving bin order.
+    scale[0] = 0.5 / np.float64(nr - 1)
+    return scale
+
+#***********************************************************************
+
+def potential_profile_1b40(h, tab_mass, amax, bmax, cmax, count=None, shell_counts=None):
+    """Return the cumulative potential-energy profile used for virial scans.
+
+    Default policy is the TASK-21 adopted configuration:
+    shell integration with exact discrete shell self-pair counting, exact-PE
+    rescaling for small halos, and raw profile outer energy for large halos.
+
+    Optional flags retained on ``halo_defs`` for comparison:
+    - ``virial_pe_profile``: ``shell`` (default) or ``baseline``.
+    - ``virial_pe_norm_policy``: ``profile_outer_for_large`` (default),
+      or ``legacy``.
+    - ``virial_shell_self_mode``: ``count`` (default) or ``half_shell``.
+    """
+    from num_rec import rf
+
+    mode = _virial_pe_profile_mode()
+    norm_policy = _virial_pe_norm_policy()
+    shell_self_mode = _virial_shell_self_mode()
+    nr = tab_mass.size
+
+    if mode == 'baseline':
+        # Existing approximation based on Appendix B of GALICS 1.
+        tabp = -3/5 * H.gravconst * tab_mass**2 * rf(h['sha']**2, h['shb']**2, h['shc']**2)
+    elif mode == 'shell':
+        dm = np.diff(tab_mass, prepend=0.0)
+        mass_before = tab_mass - dm
+        if shell_self_mode == 'count':
+            if shell_counts is None:
+                raise ValueError("shell_counts is required for virial_shell_self_mode='count'")
+            shell_counts = np.asarray(shell_counts, dtype=np.float64)
+            self_factor = np.zeros(nr, dtype=np.float64)
+            occupied = shell_counts > 0
+            # Discrete pair-counting correction: a shell with n particles has
+            # n*(n-1)/2 internal pairs, so one-particle shells have no self term.
+            self_factor[occupied] = 0.5 * (shell_counts[occupied] - 1.0) / shell_counts[occupied]
+        elif shell_self_mode == 'half_shell':
+            self_factor = 0.5
+        else:
+            raise ValueError(f"unknown virial_shell_self_mode={shell_self_mode!r}")
+        r_eff = _shell_scale(nr) * (amax*bmax*cmax)**(1.0/3.0)
+        tabp = -H.gravconst * np.cumsum((mass_before + self_factor * dm) * dm / r_eff)
+    else:
+        raise ValueError(f"unknown virial_pe_profile={mode!r}")
+
+    outer = tabp[nr-1]
+    if norm_policy == 'profile_outer_for_large':
+        if (count is not None) and (count < _direct_pe_particle_limit()):
+            if (h['ep'] != outer) and (outer != 0.0):
+                tabp = tabp / outer * h['ep']
+        else:
+            h['ep'] = outer
+            h['et'] = h['ek'] + h['ep']
+    elif norm_policy == 'legacy':
+        if (h['ep'] != outer) and (outer != 0.0):
+            tabp = tabp / outer * h['ep']
+    else:
+        raise ValueError(f"unknown virial_pe_norm_policy={norm_policy!r}")
+
+    return tabp
 
 #***********************************************************************
 
@@ -998,20 +1091,6 @@ def det_vir_props_1b4(h:np.void,v,amax=0,bmax=0,cmax=0,ttab=1000, member=None):
     # assume initial departure from virialization is 100 .
     virth_old = 1.0
     virth = 100.0
-    virths = np.abs((2.0*tab_ekin_o0+tab_epot_o0)/(tab_ekin_o0+tab_epot_o0))
-    good_virth = virths <= 0.2
-    if good_virth.any():
-        i0 = np.where(good_virth)[0][-1]
-        virth = virths[i0]
-        if virth < virth_old:
-            mvir      = tab_mass_o0[i0] 
-            # take the min here bc initialization throws away all the empty outer shells
-            avir      = min(avir,i0/(ttab-1)*amax)
-            bvir      = min(bvir,i0/(ttab-1)*bmax)
-            cvir      = min(cvir,i0/(ttab-1)*cmax)
-            rvir      = (avir*bvir*cvir)**(1./3.)
-            # kvir      = tab_ekin_o0[i0] 
-            # pvir      = tab_epot_o0[i0]
     for i0 in frange(ttab-1,0,-1):
         # if region is unbound, it cannot be virialized in the same time 
         if( (tab_ekin_o0[i0]+tab_epot_o0[i0]) >= 0.0): continue
@@ -1271,7 +1350,10 @@ def det_halo_energies_1b3(h:np.void, full_PE=1000, member=None):
     else:
         # Direct summation of the potential energy over all pairs of particles in the halo
         comb = list(combinations(np.arange(inp), 2)) # only count pairs once
-        drs = np.squeeze(np.diff(ipos[comb], axis=1))
+        drs = np.diff(ipos[comb], axis=1)[:,0,:]
+        if H.FlagPeriod != 0:
+            drs[drs > +H.Lbox_pt2] -= H.Lbox_pt
+            drs[drs < -H.Lbox_pt2] += H.Lbox_pt
         dists = np.sqrt(np.sum(drs**2, axis=1))/H.Lbox_pt
         ms = np.prod(imass[comb], axis=1)
         ped = np.sum(-ms / dists)
