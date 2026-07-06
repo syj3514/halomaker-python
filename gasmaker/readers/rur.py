@@ -15,6 +15,7 @@ class RurCellReader:
         if rur_path and rur_path not in sys.path:
             sys.path.insert(0, rur_path)
         from rur import uri
+        uri.timer.verbose=0
 
         self.snapshot = uri.RamsesSnapshot(
             repo, iout, mode=mode, verbose=0
@@ -85,7 +86,7 @@ class RurCellReader:
                 nthread=nthread,
                 use_cache=False,
             ).table.copy()
-            snap.clear()
+            snap.clear(verbose=0)
             try:
                 stars = snap.get_part(
                     box=None,
@@ -117,8 +118,8 @@ class RurCellReader:
         rho_crit = 3.0 * h02 / 8.0 / np.pi / grav
         rho_crit *= 5.02785e-31 * (3.086e19) ** 3
         units["rho_crit_msol_pkpc3"] = rho_crit / (aexp ** 3)
-        snap.clear()
+        snap.clear(verbose=0)
         return ReadResult(cells=cells, dms=dms, stars=stars, cpus=cpus, units=units)
 
     def close(self):
-        self.snapshot.clear()
+        self.snapshot.clear(verbose=0)
