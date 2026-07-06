@@ -27,6 +27,13 @@ HaloMaker alone does not produce.
   r_vir / r200 / r500.
 - **Restartable:** a long run can be interrupted and resumed; finished halos are
   skipped and the output stays consistent.
+- **HaloMaker-style config files:** running `python GasMaker.py` with no
+  arguments reads `input_GasMaker.dat` (parameters) and
+  `inputfiles_GasMaker.dat` (one job per line, processed sequentially) from the
+  working directory — the same operating convention as HaloMaker, enabling
+  multi-snapshot batches. The CLI mode is unchanged, and both modes were
+  verified to produce identical output (only pre-existing runtime timing
+  fields differ between any two runs). See `examples/*.example`.
 - **Accurate cell–sphere overlap, made practical.** Measuring gas in a sphere
   needs the fraction of each boundary AMR cell that lies inside. The exact
   reference (subdivide every boundary cell to octree depth 8) is correct but

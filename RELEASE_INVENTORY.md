@@ -25,7 +25,8 @@ Runtime Python code:
 GasMaker (gas post-processor):
 
 - `GasMaker.py` (entry point)
-- `gasmaker/` package: `pipeline.py`, `catalog.py`, `geometry.py`, `overlap.py`
+- `gasmaker/` package: `pipeline.py`, `catalog.py`, `geometry.py`, `overlap.py`,
+  `config.py` (HaloMaker-style config-file parsers)
 - `gasmaker/readers/`: `base.py` (reader interface), `rur.py` (optional rur
   adapter, lazily imported — the core does not depend on `rur`)
 
@@ -82,6 +83,8 @@ Repository metadata not copied:
 - `run.sh`: minimal execution wrapper
 - `examples/input_HaloMaker.dat.example`: sanitized parameter example
 - `examples/inputfiles_HaloMaker.dat.example`: sanitized snapshot-list example
+- `examples/input_GasMaker.dat.example`: GasMaker parameter example (config mode)
+- `examples/inputfiles_GasMaker.dat.example`: GasMaker job-list example (config mode)
 
 ## Still Required Before Public Release
 
