@@ -48,6 +48,28 @@ HaloMaker alone does not produce.
 
 ## 🌟 HaloMaker — major changes
 
+### Physically-correct virial masses  **[released, breaking — TASK-21]**
+The virial radius/mass scan (`|2K+W|/|K+W| ≤ 0.2`) used a potential-energy
+profile with **no radius dependence** — a constant whole-halo shape factor
+applied to every shell (`W(<r) ∝ M(<r)²`), which made the inner energy balance
+unphysical and biased `rvir`/`mvir`. It is replaced by a **shell-integral
+`W(<r)`** with an exact discrete correction for particle counting (a shell
+holding *n* particles has *n(n−1)/2* internal pairs, so one-particle shells
+carry no self-term). Against direct pair-summation ground truth the
+truth-`rvir` error drops from **median 0.32 / p90 1.29** to **0.0059 / 0.095**.
+- **`ep`/`et` semantics change** for halos ≥1000 members: the old closed-form
+  `ep` approximation was ~76% off (median) vs direct summation; it is replaced
+  by the profile's outer value (~4% off). Small halos keep their exact
+  pair-summed `ep` (now with minimum-image periodicity — a real bugfix for
+  box-boundary halos). `et = ek + ep` stays consistent everywhere.
+- Catalog impact (intended, not a regression): ~8–25% of halos move in
+  `rvir`/`mvir`/`cvel`/`tvir`/`rho_0` depending on the box; halo *finding*
+  (membership, hierarchy) is untouched. All three frozen goldens were re-frozen.
+- Legacy behavior remains available via `halo_defs` comparison flags
+  (`virial_pe_profile='baseline'`, `virial_pe_norm_policy='legacy'`).
+- Note: GasMaker `_rvir`-aperture quantities and SO fields inherit the new
+  `rvir` when `gas_bricks` are regenerated against a new catalog.
+
 ### Consistent output units  **[released, breaking — `halomaker_units_v2`]**
 HaloMaker and GasMaker HDF5 outputs now share one unit system, removing a
 1e11× / physical-vs-code-unit mismatch that could silently corrupt joins
@@ -285,6 +307,9 @@ extending the pipeline:
 - Streaming/chunked verification harness for very large runs (npart > 10⁹) —
   *withdrawn* for now (current machines have ≥300 GB RAM); revive for larger sims
   or smaller-memory hosts.
-- Virial potential-energy profile refinement (`W(<r)` per-shell radius scaling) —
-  candidate science task; changes `rvir`/`mvir`/energy fields, so it needs golden
-  re-validation.
+- ~~Virial potential-energy profile refinement (`W(<r)` per-shell radius
+  scaling).~~ **Done** — shell-integral profile with exact discrete pair
+  counting + hybrid `ep` policy (see "Physically-correct virial masses");
+  all three goldens re-frozen.
+- Regenerate `gas_bricks` against the re-frozen catalogs so GasMaker
+  `_rvir`-aperture and SO fields inherit the corrected `rvir`.

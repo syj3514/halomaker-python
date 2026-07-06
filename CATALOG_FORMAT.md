@@ -87,7 +87,7 @@ The source document describes `/catalog/halo` as an 81-field structured table.
 | Star formation rate, 10 Myr | `SFR10`, `SFR10_r50`, `SFR10_r90` | `Msun/yr` | short-timescale SFR in stellar apertures |
 | Spin and dispersions | `spin`, `sigma`, `sigma_dm`, `sigma*` | dimensionless; km/s for dispersions | spin and velocity dispersion summaries |
 | Stellar kinematics | `vrot`, `sig3d`, `sigcyl`, `vrot_r50`, `sig3d_r50`, `sigcyl_r50`, `vrot_r90`, `sig3d_r90`, `sigcyl_r90` | km/s | stellar kinematics in `r*`, `r50`, `r90` apertures |
-| Energy and virial | `ek`, `ep`, `et`, `mvir`, `tvir`, `cvel` | `Msun (km/s)^2`; `mvir` Msun; `tvir` K; `cvel` km/s | energy and virial diagnostics |
+| Energy and virial | `ek`, `ep`, `et`, `mvir`, `tvir`, `cvel` | `Msun (km/s)^2`; `mvir` Msun; `tvir` K; `cvel` km/s | energy and virial diagnostics; see the `ep`/`et` semantics note below |
 | NFW / density profile | `rho_0`, `r_c`, `cNFW`, `cNFWerr`, `vmaxcir`, `rmaxcir`, `inslope`, `inslopeerr` | `rho_0` Msun/kpc^3; `r_c/rmaxcir` code unit; `vmaxcir` km/s; others dimensionless | profile fit and inner-slope diagnostics |
 | Contamination | `mcontam` | `Msun` | low-resolution / contaminant mass |
 
@@ -99,6 +99,8 @@ Notes:
 | `r50` / `r90` | stellar half-/90%-mass radii in code units |
 | `level == 1` | top-level root halos for GasMaker root selection |
 | `*_star` chemistry | Ra4 snapshots with `chem_*` particle descriptors populate these fields; Ra3 or missing-descriptor snapshots keep them as `NaN` |
+| `ep` / `et` semantics (TASK-21) | For halos below the direct-sum threshold (default 1000 members) `ep` is the exact pairwise potential energy (with minimum-image periodicity). For larger halos `ep` is the outer value of the shell-integral `W(<r)` profile (median ~4% of direct-sum truth); before TASK-21 it was a closed-form constant-shape approximation (median ~76% off). `et = ek + ep` always. |
+| virial scan (TASK-21) | `rvir`/`mvir` come from scanning `\|2K+W\|/\|K+W\| <= 0.2` on the shell-integral `W(<r)` with exact discrete shell self-pair counting (one-particle shells carry no self term); comparison flags `virial_pe_profile` / `virial_pe_norm_policy` / `virial_shell_self_mode` on `halo_defs` can restore the legacy profile for A/B runs |
 
 ### 3.3 `/photometry/{CB07,BC03,FSPS}`
 
