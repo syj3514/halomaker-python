@@ -11,5 +11,5 @@ use:
 FSPS_PATH=/path/to/fsps bash build.sh
 ```
 
-See `SSP_MODELS.md` (repo root) for the full table-generation and FSPS setup
+See `docs/SSP_MODELS.md` (repo root) for the full table-generation and FSPS setup
 instructions.

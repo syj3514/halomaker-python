@@ -8,7 +8,7 @@ Two outputs are covered:
   (``read_gas_bricks_hdf``), row-aligned with the catalog and joined by ``id``
   (``join_gas_to_catalog``).
 
-See ``CATALOG_FORMAT.md`` for the authoritative field list, groups, and units.
+See ``docs/CATALOG_FORMAT.md`` for the authoritative field list, groups, and units.
 These functions are intentionally small and dependency-light (only ``h5py`` and
 ``numpy``) so they can be copied into an analysis script as a starting point.
 """
@@ -48,7 +48,7 @@ def read_bricks_hdf(fname, return_params=False, return_pids=False,
     Returns
     -------
     halo : numpy structured array
-        The ``/catalog/halo`` table (all fields, see CATALOG_FORMAT.md).
+        The ``/catalog/halo`` table (all fields, see docs/CATALOG_FORMAT.md).
     params : dict, optional
         Merged ``/header`` + ``/input`` attributes. Returned if ``return_params``.
     pids : numpy array, optional
@@ -193,7 +193,7 @@ def read_gas_bricks_hdf(fname):
         kinematics, spherical-overdensity quantities, overlap diagnostics).
         Row-aligned with ``/catalog/halo`` of the source catalog; join by ``id``.
         Note GasMaker masses are in Msun (not 10^11 Msun) and ``r200``/``r500``
-        are in code units [0, 1) — see CATALOG_FORMAT.md.
+        are in code units [0, 1) — see docs/CATALOG_FORMAT.md.
     processed : numpy bool array
         Per-row completion mask (only the requested roots' descendants are
         computed; the rest stay NaN / False).

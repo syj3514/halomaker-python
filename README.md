@@ -153,7 +153,7 @@ output. Files are tagged `/header.units_version = "halomaker_units_v2"`, carry
 `box_comoving_mpc` / `box_physical_mpc` attributes, and per-field `field_units`
 JSON attributes. Recover physical Mpc with `x_phys = x_code * box_physical_mpc`.
 Analysis scripts that assumed the old units must branch on `units_version`. See
-**`CATALOG_FORMAT.md`** for the full field-by-field unit table.
+**`docs/CATALOG_FORMAT.md`** for the full field-by-field unit table.
 
 Each run computes intrinsic rest-frame stellar photometry with all bundled SSP
 models and writes the aligned results under:
@@ -165,14 +165,14 @@ models and writes the aligned results under:
 The datasets contain SDSS `ugriz`, Johnson `UBV`, `Kmag`, and r-band
 luminosity-weighted stellar age, metallicity, `r50`, and `r90`. FSPS uses the
 2MASS Ks response for its `Kmag`; this distinction is recorded in the group
-metadata. See `SSP_MODELS.md` for model definitions and data provenance.
+metadata. See `docs/SSP_MODELS.md` for model definitions and data provenance.
 
 For Ra4 snapshots that store per-element stellar chemistry, the catalog also
 includes mass-weighted per-element stellar abundances `H_star, O_star, Fe_star,
 Mg_star, C_star, N_star, Si_star, S_star, D_star` (mass fraction); snapshots
 without stellar chemistry leave these `NaN`. Set `dump_members` (which writes
 per-member pos/vel/mass for all members; the old keys `dump_DMs`/`dump_stars`
-still work) to also export the flat `/member` arrays. See `CATALOG_FORMAT.md`.
+still work) to also export the flat `/member` arrays. See `docs/CATALOG_FORMAT.md`.
 
 If a run is interrupted with Ctrl-C, killed by a scheduler, or leaves Python
 `forkserver` / `resource_tracker` processes behind, inspect and clean runtime
@@ -227,7 +227,7 @@ key `progress`; `auto` picks a tqdm bar on a terminal and plain timestamped
 lines when redirected) and `--progress-every N` / `progress_every`.
 
 The output defaults to `gas_bricks{iout:05d}.h5` (override with `--output`). It
-is row-aligned with the catalog and joined by `id`; see **`CATALOG_FORMAT.md`**
+is row-aligned with the catalog and joined by `id`; see **`docs/CATALOG_FORMAT.md`**
 for the full field list of both outputs. A `gas_bricks` file is derived from one
 specific catalog (recorded as `source_catalog` in its `/header`): the `_rvir`
 apertures and SO fields inherit that catalog's `rvir`, so regenerate it whenever
@@ -249,7 +249,7 @@ the small `gasmaker.readers.base.CellReader` interface (incl. `read_boxes` and
 
 > Status: validated against the RUR reference at machine precision on a
 > stratified NH2 sample (gas/particle masses, metallicity, chemistry — see
-> `WHATS_NEW.md`). `r200/r500` use threshold-crossing interpolation, which
+> `docs/WHATS_NEW.md`). `r200/r500` use threshold-crossing interpolation, which
 > differs by design from RUR's nearest-shell selection.
 
 ## Files

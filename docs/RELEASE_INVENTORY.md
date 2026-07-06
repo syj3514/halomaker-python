@@ -74,7 +74,9 @@ Repository metadata not copied:
 
 ## 3. New Files Added
 
-- `README.md`: installation, build, configuration, and run instructions
+- `README.md` / `README_KOR.md` (repo root): installation, build, configuration, and run instructions
+- `docs/`: all other documentation (`CATALOG_FORMAT.md`, `WHATS_NEW.md`,
+  `SSP_MODELS.md`, `RELEASE_INVENTORY.md`)
 - `pyproject.toml`: package metadata + the single source of runtime dependencies
 - `environment.yml`: optional conda environment (installs the project via `pip -e .`,
   so it inherits `pyproject.toml` dependencies)
