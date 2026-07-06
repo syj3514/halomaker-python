@@ -12,6 +12,7 @@ from pathlib import Path
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
 from gasmaker import GasMaker
+from gasmaker.progress import MODES as PROGRESS_MODES, Progress
 from gasmaker.config import (
     INPUTFILES_FILE,
     PARAM_FILE,
@@ -87,6 +88,18 @@ def _build_parser():
     parser.add_argument("--overlap-threshold", type=float, default=0.1)
     parser.add_argument("--read-grav", action="store_true")
     parser.add_argument(
+        "--progress",
+        choices=PROGRESS_MODES,
+        default="auto",
+        help="run progress display: auto (tty->bar, else plain), bar, plain, quiet",
+    )
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=1,
+        help="in plain mode, print one line every N completed roots",
+    )
+    parser.add_argument(
         "--rur-path",
         default=None,
         help="path to a rur checkout (default: use installed rur, or $RUR_PATH)",
@@ -94,10 +107,39 @@ def _build_parser():
     return parser
 
 
+def _describe_root_policy(args):
+    if args.root_id is not None:
+        policy = f"single root {args.root_id}"
+    elif args.root_ids:
+        policy = f"root_ids={','.join(str(item) for item in args.root_ids)}"
+    else:
+        policy = "all level-1 roots"
+    if args.max_roots is not None:
+        policy += f" (max_roots={args.max_roots})"
+    return policy
+
+
 def _run_job(args):
+    import time
+
     if args.output is None:
         args.output = Path(f"gas_bricks{args.iout:05d}.h5")
 
+    progress = Progress(
+        mode=getattr(args, "progress", "auto"),
+        every=getattr(args, "progress_every", 1),
+    )
+    progress.banner(
+        catalog=args.catalog,
+        repo=args.repo,
+        iout=args.iout,
+        mode=args.mode,
+        output=args.output,
+        nthread=args.nthread,
+        policy=_describe_root_policy(args),
+    )
+
+    stage_t0 = time.perf_counter()
     try:
         reader = RurCellReader(
             args.repo, args.iout, mode=args.mode, rur_path=args.rur_path
@@ -108,6 +150,12 @@ def _run_job(args):
             f"Install rur or set --rur-path, or supply another reader that "
             f"implements gasmaker.readers.base.CellReader. ({exc})"
         )
+    progress.stage(
+        f"snapshot reader ready (rur mode={args.mode}, iout={args.iout}) — "
+        f"{time.perf_counter() - stage_t0:.1f}s"
+    )
+
+    stage_t0 = time.perf_counter()
     maker = GasMaker(
         args.catalog,
         reader,
@@ -116,6 +164,12 @@ def _run_job(args):
         overlap_depth=args.overlap_depth,
         overlap_tolerance=args.overlap_tolerance,
         overlap_threshold=args.overlap_threshold,
+    )
+    n_halos = len(maker.catalog.halos)
+    n_roots = len(maker.catalog.root_rows())
+    progress.stage(
+        f"catalog loaded: {n_halos} halos, {n_roots} level-1 roots — "
+        f"{time.perf_counter() - stage_t0:.1f}s"
     )
     try:
         root_ids = _select_root_ids(
@@ -135,10 +189,12 @@ def _run_job(args):
             simulate_crash_after_summary_root=(
                 args.simulate_crash_after_summary_root
             ),
+            progress=progress,
         )
     finally:
         reader.close()
 
+    progress.finish(status)
     print(f"requested_roots={','.join(str(item) for item in status['requested'])}")
     print(f"processed_roots={','.join(str(item) for item in status['processed'])}")
     print(f"skipped_roots={','.join(str(item) for item in status['skipped'])}")

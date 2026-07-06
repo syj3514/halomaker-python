@@ -24,6 +24,8 @@ SUPPORTED_KEYS = {
     "read_grav",
     "rur_path",
     "overwrite",
+    "progress",
+    "progress_every",
 }
 
 
@@ -71,8 +73,15 @@ def _parse_root_ids(value: str) -> list[int]:
 def _coerce_value(key: str, value: str):
     if key in {"padding", "overlap_tolerance", "overlap_threshold"}:
         return float(value)
-    if key in {"nthread", "overlap_depth", "max_roots"}:
+    if key in {"nthread", "overlap_depth", "max_roots", "progress_every"}:
         return int(value)
+    if key == "progress":
+        from .progress import MODES
+        if value not in MODES:
+            raise ValueError(
+                f"{PARAM_FILE}: key 'progress' expects one of {MODES}, got {value!r}"
+            )
+        return value
     if key in {"read_grav", "overwrite"}:
         return _parse_bool(value, key=key)
     if key == "root_ids":

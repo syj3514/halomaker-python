@@ -34,6 +34,12 @@ HaloMaker alone does not produce.
   multi-snapshot batches. The CLI mode is unchanged, and both modes were
   verified to produce identical output (only pre-existing runtime timing
   fields differ between any two runs). See `examples/*.example`.
+- **Run-wide progress reporting:** long runs now show a startup banner, stage
+  timings, per-root progress (tqdm bar on a terminal, timestamped plain lines
+  when redirected — never `\r` spam in log files), and an end summary (wall
+  time, read/compute totals, slowest root). Progress goes to stderr; stdout
+  keeps only the final machine-readable summary. `--progress
+  {auto,bar,plain,quiet}` / config `progress`.
 - **Accurate cell–sphere overlap, made practical.** Measuring gas in a sphere
   needs the fraction of each boundary AMR cell that lies inside. The exact
   reference (subdivide every boundary cell to octree depth 8) is correct but

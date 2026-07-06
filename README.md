@@ -218,6 +218,14 @@ leading `#`/`!` comments and blank lines are ignored, quotes around paths are
 decorative, and paths with spaces are not supported. Multiple lines are
 processed sequentially; duplicate output filenames are rejected before running.
 
+Long runs show run-wide progress: a startup banner, stage timings, a per-root
+progress display, and an end summary (wall time, read/compute totals, slowest
+root). Progress goes to **stderr** while stdout keeps only the final summary
+lines, so `> result.log` stays machine-parseable and `> run.log 2>&1` captures
+the full timeline. Control it with `--progress {auto,bar,plain,quiet}` (config
+key `progress`; `auto` picks a tqdm bar on a terminal and plain timestamped
+lines when redirected) and `--progress-every N` / `progress_every`.
+
 The output defaults to `gas_bricks{iout:05d}.h5` (override with `--output`). It
 is row-aligned with the catalog and joined by `id`; see **`CATALOG_FORMAT.md`**
 for the full field list of both outputs. A `gas_bricks` file is derived from one

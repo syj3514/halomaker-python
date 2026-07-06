@@ -15,6 +15,10 @@ roots              = all
 # root_ids         = 3,11,15
 # max_roots        = 10
 
+# Progress display: auto (tty -> bar, redirect -> plain), bar, plain, quiet.
+progress           = auto
+# progress_every   = 10     # plain mode: one line every N roots
+
 read_grav          = .false.
 overwrite          = .false.
 # rur_path         = /path/to/rur

@@ -194,6 +194,13 @@ HaloMaker inputfiles parser와 같은 공백 분리 관례를 따릅니다: 행 
 주석과 빈 줄만 무시하고, 경로 따옴표는 장식용이며, 공백 포함 경로는 지원하지
 않습니다. 여러 줄은 순차 실행되며, 중복 output filename은 실행 전에 에러 처리됩니다.
 
+긴 run은 전 구간 진행 상황을 표시합니다: 시작 배너, 단계별 소요, root별 진행,
+종료 요약(wall time·read/compute 합계·최다 소요 root). 진행 표시는 **stderr**로,
+stdout에는 최종 요약 줄만 나가므로 `> result.log`는 파싱 가능하게 유지되고
+`> run.log 2>&1`은 전체 타임라인을 담습니다. `--progress {auto,bar,plain,quiet}`
+(config 키 `progress`; `auto`=터미널이면 tqdm bar, 리다이렉트면 타임스탬프 줄)과
+`--progress-every N`(`progress_every`)으로 제어합니다.
+
 출력 기본 이름은 `gas_bricks{iout:05d}.h5`입니다(`--output`으로 변경 가능). 카탈로그와
 row 정렬되어 `id`로 join되며, 두 출력의 전체 필드 목록은 **`CATALOG_FORMAT.md`** 참고.
 gas_bricks는 특정 카탈로그 하나에서 파생됩니다(`/header`의 `source_catalog`에 기록):

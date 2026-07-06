@@ -896,10 +896,16 @@ class GasMaker:
         nthread=1,
         stop_after_roots=None,
         simulate_crash_after_summary_root=None,
+        progress=None,
     ):
         root_ids = [int(root_id) for root_id in root_ids]
         self.initialize_output(output_path, root_ids, overwrite=overwrite)
         completed = self.completed_roots(output_path)
+        if progress is not None:
+            already_done = sum(1 for root_id in root_ids if root_id in completed)
+            progress.start_roots(
+                len(root_ids), already_done, len(root_ids) - already_done
+            )
         processed_now = []
         skipped = []
         for root_id in root_ids:
@@ -922,6 +928,8 @@ class GasMaker:
             )
             completed.add(root_id)
             processed_now.append(root_id)
+            if progress is not None:
+                progress.root_done(metrics)
             if stop_after_roots is not None and len(processed_now) >= stop_after_roots:
                 break
         return {
