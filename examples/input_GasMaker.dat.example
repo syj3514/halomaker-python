@@ -1,0 +1,20 @@
+# GasMaker parameter file. Run `python GasMaker.py` with no arguments in the
+# directory containing this file and inputfiles_GasMaker.dat.
+
+mode               = nh2
+radius_field       = r
+padding            = 1.1
+nthread            = 1
+overlap_depth      = 8
+overlap_tolerance  = 0.05
+overlap_threshold  = 0.1
+
+# Root selection follows the CLI priority:
+# root_ids, then roots=all; max_roots truncates the selected list.
+roots              = all
+# root_ids         = 3,11,15
+# max_roots        = 10
+
+read_grav          = .false.
+overwrite          = .false.
+# rur_path         = /path/to/rur

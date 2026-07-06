@@ -203,6 +203,21 @@ python GasMaker.py <catalog.h5> <ramses_repo> <iout> --root-ids 3,11,15
 python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all
 ```
 
+GasMaker can also be run from HaloMaker-style config files. Put
+`input_GasMaker.dat` (parameters) and `inputfiles_GasMaker.dat` (one job per
+line) in the working directory, then run:
+
+```bash
+python GasMaker.py
+```
+
+See `examples/input_GasMaker.dat.example` and
+`examples/inputfiles_GasMaker.dat.example`. `inputfiles_GasMaker.dat` follows
+the same whitespace-splitting convention as HaloMaker's inputfiles parser:
+leading `#`/`!` comments and blank lines are ignored, quotes around paths are
+decorative, and paths with spaces are not supported. Multiple lines are
+processed sequentially; duplicate output filenames are rejected before running.
+
 The output defaults to `gas_bricks{iout:05d}.h5` (override with `--output`). It
 is row-aligned with the catalog and joined by `id`; see **`CATALOG_FORMAT.md`**
 for the full field list of both outputs. A `gas_bricks` file is derived from one

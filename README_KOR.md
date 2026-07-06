@@ -180,6 +180,20 @@ python GasMaker.py <catalog.h5> <ramses_repo> <iout> --root-ids 3,11,15
 python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all
 ```
 
+GasMaker는 HaloMaker식 config 파일로도 실행할 수 있습니다. 작업 디렉토리에
+`input_GasMaker.dat`(파라미터)와 `inputfiles_GasMaker.dat`(한 줄=작업)를 둔 뒤
+인자 없이 실행합니다.
+
+```bash
+python GasMaker.py
+```
+
+예시는 `examples/input_GasMaker.dat.example` 및
+`examples/inputfiles_GasMaker.dat.example` 참고. `inputfiles_GasMaker.dat`는
+HaloMaker inputfiles parser와 같은 공백 분리 관례를 따릅니다: 행 선두 `#`/`!`
+주석과 빈 줄만 무시하고, 경로 따옴표는 장식용이며, 공백 포함 경로는 지원하지
+않습니다. 여러 줄은 순차 실행되며, 중복 output filename은 실행 전에 에러 처리됩니다.
+
 출력 기본 이름은 `gas_bricks{iout:05d}.h5`입니다(`--output`으로 변경 가능). 카탈로그와
 row 정렬되어 `id`로 join되며, 두 출력의 전체 필드 목록은 **`CATALOG_FORMAT.md`** 참고.
 gas_bricks는 특정 카탈로그 하나에서 파생됩니다(`/header`의 `source_catalog`에 기록):

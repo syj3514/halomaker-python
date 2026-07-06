@@ -1,0 +1,9 @@
+# Format (one GasMaker job per line; processed in order):
+# '<catalog.h5>'  '<ramses_repo>'  <iout>  [output]
+#
+# Lines beginning with # or ! and blank lines are ignored. Like HaloMaker's
+# inputfiles parser, this file uses whitespace splitting; quoted paths are only
+# decorative, so paths must not contain spaces.
+
+'/path/to/catalog_00060.h5'  '/path/to/ramses/repo'  60
+'/path/to/catalog_00061.h5'  '/path/to/ramses/repo'  61  gas_bricks00061_custom.h5

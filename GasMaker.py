@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import argparse
 import os
+import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 # HDF5 file locking fails (errno 11, "Resource temporarily unavailable") on some
@@ -10,6 +12,13 @@ from pathlib import Path
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
 from gasmaker import GasMaker
+from gasmaker.config import (
+    INPUTFILES_FILE,
+    PARAM_FILE,
+    read_inputfiles,
+    read_params,
+    validate_unique_outputs,
+)
 # The rur adapter is the default snapshot reader. It is imported lazily (and
 # `rur` itself only when a reader is constructed) so the GasMaker core does not
 # depend on rur. To use a different simulation/format, implement the
@@ -43,7 +52,7 @@ def _select_root_ids(maker, positional_root_id, roots, root_ids, max_roots):
     return selected
 
 
-def main():
+def _build_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("catalog")
     parser.add_argument("repo")
@@ -82,7 +91,10 @@ def main():
         default=None,
         help="path to a rur checkout (default: use installed rur, or $RUR_PATH)",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def _run_job(args):
     if args.output is None:
         args.output = Path(f"gas_bricks{args.iout:05d}.h5")
 
@@ -132,6 +144,44 @@ def main():
     print(f"skipped_roots={','.join(str(item) for item in status['skipped'])}")
     print(f"remaining_roots={','.join(str(item) for item in status['remaining'])}")
     print(f"output={args.output}")
+
+
+def _run_config_mode(parser):
+    if not (Path(PARAM_FILE).exists() and Path(INPUTFILES_FILE).exists()):
+        parser.error(
+            f"missing positional arguments or config files; run without arguments "
+            f"only when {PARAM_FILE} and {INPUTFILES_FILE} exist in the current "
+            f"directory"
+        )
+
+    try:
+        params = read_params(PARAM_FILE)
+        jobs = read_inputfiles(INPUTFILES_FILE)
+        validate_unique_outputs(jobs)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc))
+
+    defaults = parser.parse_args(["__catalog__", "__repo__", "0"])
+    for job in jobs:
+        args = SimpleNamespace(**vars(defaults))
+        args.catalog = job.catalog
+        args.repo = job.repo
+        args.iout = job.iout
+        args.root_id = None
+        args.output = job.output
+        for key, value in params.items():
+            setattr(args, key, value)
+        _run_job(args)
+
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv[1:]
+    parser = _build_parser()
+    if argv:
+        _run_job(parser.parse_args(argv))
+    else:
+        _run_config_mode(parser)
 
 
 if __name__ == "__main__":
