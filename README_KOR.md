@@ -182,6 +182,9 @@ python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all
 
 출력 기본 이름은 `gas_bricks{iout:05d}.h5`입니다(`--output`으로 변경 가능). 카탈로그와
 row 정렬되어 `id`로 join되며, 두 출력의 전체 필드 목록은 **`CATALOG_FORMAT.md`** 참고.
+gas_bricks는 특정 카탈로그 하나에서 파생됩니다(`/header`의 `source_catalog`에 기록):
+`_rvir` aperture·SO 필드가 그 카탈로그의 `rvir`을 상속하므로, **카탈로그가 바뀌면
+재생성**해야 합니다(예: TASK-21 virial 정밀화 이후).
 
 스냅샷 reader는 **교체 가능(pluggable)** 합니다. 기본 reader
 (`gasmaker/readers/rur.py`)는 `rur` 패키지를 쓰지만 **lazy import** 되므로

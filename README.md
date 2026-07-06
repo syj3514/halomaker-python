@@ -205,7 +205,10 @@ python GasMaker.py <catalog.h5> <ramses_repo> <iout> --roots all
 
 The output defaults to `gas_bricks{iout:05d}.h5` (override with `--output`). It
 is row-aligned with the catalog and joined by `id`; see **`CATALOG_FORMAT.md`**
-for the full field list of both outputs. The fixed physical thresholds (cold
+for the full field list of both outputs. A `gas_bricks` file is derived from one
+specific catalog (recorded as `source_catalog` in its `/header`): the `_rvir`
+apertures and SO fields inherit that catalog's `rvir`, so regenerate it whenever
+the catalog changes (e.g. after the TASK-21 virial refinement). The fixed physical thresholds (cold
 `T<10⁴ K`, dense `n_H>5/cc`, spherical overdensities `200`/`500 ρ_crit`) are
 recorded in the output `/header` for provenance.
 
