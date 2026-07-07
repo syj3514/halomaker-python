@@ -11,6 +11,11 @@ from pathlib import Path
 # Export HDF5_USE_FILE_LOCKING to override.
 os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
+_ROOT = Path(__file__).resolve().parent
+_SRC = str(_ROOT / "src")
+if _SRC not in sys.path:
+    sys.path.append(_SRC)
+
 from gasmaker import GasMaker
 from gasmaker.progress import MODES as PROGRESS_MODES, Progress
 from gasmaker.config import (

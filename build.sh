@@ -4,7 +4,8 @@ set -euo pipefail
 PYTHON="${PYTHON:-python}"
 F90="${F90:-gfortran}"
 BRANCH="${BRANCH:-main}"
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT="$(cd "$(dirname "$SCRIPT")" && pwd)"
 
 bash "$ROOT/tools/prepare_ssp_tables.sh"
 
@@ -14,7 +15,7 @@ if [[ "${HALOMAKER_TABLES_ONLY:-0}" == "1" ]]; then
 fi
 
 if [[ "$BRANCH" == "main" ]]; then
-    BUILD_DIR="$ROOT"
+    BUILD_DIR="$ROOT/src"
 else
     BUILD_DIR="$ROOT/patch/$BRANCH"
     if [[ ! -d "$BUILD_DIR" ]]; then
@@ -29,8 +30,8 @@ for source in compute_adaptahop.f90; do
     module="${source%.f90}"
     source_path="$BUILD_DIR/$source"
     interface_path="$BUILD_DIR/${module}.pyf"
-    [[ -f "$source_path" ]] || source_path="$ROOT/$source"
-    [[ -f "$interface_path" ]] || interface_path="$ROOT/${module}.pyf"
+    [[ -f "$source_path" ]] || source_path="$ROOT/fortran/$source"
+    [[ -f "$interface_path" ]] || interface_path="$ROOT/fortran/${module}.pyf"
 
     echo "Compiling ${module} [branch=${BRANCH}]"
     "$PYTHON" -m numpy.f2py \

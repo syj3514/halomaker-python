@@ -4,7 +4,8 @@ set -euo pipefail
 PYTHON="${PYTHON:-python}"
 LOG="${1:-HaloMaker.log}"
 BRANCH="${BRANCH:-main}"
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+ROOT="$(cd "$(dirname "$SCRIPT")" && pwd)"
 
 if [[ "$BRANCH" == "main" ]]; then
     PATCH_PATH=""
@@ -22,5 +23,5 @@ if [[ -n "$PATCH_PATH" && -f "$PATCH_PATH/HaloMaker.py" ]]; then
 fi
 
 echo "Running HaloMaker [branch=${BRANCH}]"
-PYTHONPATH="${PATCH_PATH:+$PATCH_PATH:}$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+PYTHONPATH="${PATCH_PATH:+$PATCH_PATH:}$ROOT/src:$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
     "$PYTHON" "$ENTRYPOINT" 2>&1 | tee "$LOG"

@@ -1,7 +1,13 @@
 import sys
 import argparse
+import os
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
+
+_ROOT = os.path.dirname(os.path.realpath(__file__))
+_SRC = os.path.join(_ROOT, "src")
+if _SRC not in sys.path:
+    sys.path.append(_SRC)
 
 def main():
     # this program reads in the particle data from N-Body simulation snapshots and 

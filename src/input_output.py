@@ -988,7 +988,8 @@ def write_tree_brick_hdf():
     whereIam_idxs = mem['whereIam_idxs']
     whereIam_counts = mem['whereIam_counts']
     pids0_groupsorted = mem['pids0_groupsorted']
-    if H.dump_members:
+    dump_members = getattr(H, 'dump_members', False)
+    if dump_members:
         mass_10 = mem['mass_10']
         pos_10 = mem['pos_10']
         vel_10 = mem['vel_10']
@@ -1066,7 +1067,7 @@ def write_tree_brick_hdf():
         finput.attrs['dcell_min']=H.dcell_min
         finput.attrs['eps_SC']=H.eps_SC
         finput.attrs['nsteps']=H.nsteps
-        finput.attrs['dump_members']=H.dump_members
+        finput.attrs['dump_members']=dump_members
         #---------------------------------
         # Catalog
         #---------------------------------
@@ -1081,6 +1082,9 @@ def write_tree_brick_hdf():
         photometry = f44.create_group('photometry')
         for requested_model in MODELS:
             model, metadata = model_metadata(requested_model)
+            photometry_key = f'photometry_{model.lower()}'
+            if photometry_key not in mem:
+                continue
             model_group = photometry.create_group(model)
             for key, value in metadata.items():
                 model_group.attrs[key] = value
@@ -1095,11 +1099,11 @@ def write_tree_brick_hdf():
             model_group.attrs['SDSS_system'] = 'AB'
             model_group.attrs['Johnson_system'] = 'Vega'
             model_group.attrs['row_alignment'] = '/catalog/halo'
-            model_group.attrs['fields'] = ','.join(H.photometry_ssp_dtype.names)
             photo = _convert_photometry_units(
-                mem[f'photometry_{model.lower()}'][1:],
+                mem[photometry_key][1:],
                 box_physical_mpc,
             )
+            model_group.attrs['fields'] = ','.join(photo.dtype.names)
             photo_ds = model_group.create_dataset(
                 'data', shape=photo.shape, dtype=photo.dtype,
                 data=photo, compression='lzf',
@@ -1120,7 +1124,7 @@ def write_tree_brick_hdf():
         
         member_chunk = min(max(1, len(pids)), 65536)
         grp.create_dataset('pids', data=pids, compression='lzf', chunks=(member_chunk,))
-        if H.dump_members:
+        if dump_members:
             grp.attrs['fields'] = 'pids,pos,vel,mass'
             pos_ds = grp.create_dataset(
                 'pos', shape=(len(pids), 3), dtype=pos_10.dtype,
@@ -1150,4 +1154,3 @@ def write_tree_brick_hdf():
 
     full_path = os.path.abspath(filename)
     os.chmod(full_path, H.fchmod); os.chown(full_path, H.uid, H.gid)
-

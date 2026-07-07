@@ -23,17 +23,12 @@ ssp-generation = [
 
 [tool.setuptools]
 packages = ["halomaker_data", "halomaker_data.ssp_tables", "gasmaker", "gasmaker.readers"]
-py-modules = [
-    "HaloMaker",
-    "GasMaker",
-    "chem_species",
-    "compute_halo_props",
-    "compute_neiKDtree_mod",
-    "halo_defs",
-    "input_output",
-    "num_rec",
-    "ssp_photometry",
-]
+# Internal flat modules under src/ are loaded via sys.path/PYTHONPATH for the
+# HPC-style entry points; they are intentionally not pip-import targets.
+py-modules = ["HaloMaker", "GasMaker"]
+
+[tool.setuptools.package-dir]
+gasmaker = "src/gasmaker"
 
 [tool.setuptools.package-data]
 "halomaker_data.ssp_tables" = ["*.npz"]
