@@ -35,6 +35,93 @@ def sphere_cell_mask(cells, center, radius, include_boundary=True):
     return distance <= radius
 
 
+class PeriodicSpatialIndex:
+    """Periodic uniform-grid index returning source-order candidate rows."""
+
+    def __init__(self, table, grid_size=256):
+        self.table = table
+        self.grid_size = int(grid_size)
+        self.size = 0 if table is None else len(table)
+        self._all = None
+        self._keys = np.empty(0, dtype=np.uint32)
+        self._starts = np.empty(0, dtype=np.int64)
+        self._order = np.empty(0, dtype=np.int64)
+
+        if self.size == 0:
+            return
+
+        self._all = np.arange(self.size, dtype=np.int64)
+        g = self.grid_size
+
+        key = np.floor(np.mod(table["x"], 1.0) * g).astype(np.uint32)
+        np.minimum(key, g - 1, out=key)
+        key *= np.uint32(g)
+
+        component = np.floor(np.mod(table["y"], 1.0) * g).astype(np.uint32)
+        np.minimum(component, g - 1, out=component)
+        key += component
+        key *= np.uint32(g)
+
+        component = np.floor(np.mod(table["z"], 1.0) * g).astype(np.uint32)
+        np.minimum(component, g - 1, out=component)
+        key += component
+
+        self._order = np.argsort(key, kind="stable")
+        sorted_key = key[self._order]
+        self._keys, self._starts = np.unique(sorted_key, return_index=True)
+
+    def query(self, center, radius):
+        """Return source-order row indices in a periodic AABB around center."""
+        if self.size == 0:
+            return self._order
+        if not (np.isfinite(radius) and radius > 0):
+            return np.empty(0, dtype=np.int64)
+        if radius >= 0.5:
+            return self._all
+
+        g = self.grid_size
+        span = int(np.ceil(radius * g)) + 1
+        if 2 * span + 1 >= g:
+            return self._all
+
+        center = np.mod(np.asarray(center, dtype=np.float64), 1.0)
+        cbin = np.floor(center * g).astype(np.int64)
+        offsets = np.arange(-span, span + 1, dtype=np.int64)
+        xs = np.mod(cbin[0] + offsets, g)
+        ys = np.mod(cbin[1] + offsets, g)
+        zs = np.mod(cbin[2] + offsets, g)
+
+        keys = (
+            (xs[:, None, None] * g + ys[None, :, None]) * g
+            + zs[None, None, :]
+        ).ravel()
+        keys = np.unique(keys).astype(self._keys.dtype, copy=False)
+        positions = np.searchsorted(self._keys, keys)
+        in_range = positions < self._keys.size
+        if not np.any(in_range):
+            return np.empty(0, dtype=np.int64)
+        keys = keys[in_range]
+        positions = positions[in_range]
+        matched = self._keys[positions] == keys
+        if not np.any(matched):
+            return np.empty(0, dtype=np.int64)
+
+        positions = positions[matched]
+        lengths = np.diff(np.append(self._starts, self._order.size))[positions]
+        total = int(np.sum(lengths))
+        if total == 0:
+            return np.empty(0, dtype=np.int64)
+
+        indices = np.empty(total, dtype=np.int64)
+        cursor = 0
+        for start, length in zip(self._starts[positions], lengths):
+            stop = cursor + int(length)
+            indices[cursor:stop] = self._order[start:start + int(length)]
+            cursor = stop
+        indices.sort()
+        return indices
+
+
 def periodic_boxes(center, radius):
     intervals = []
     for value in center:

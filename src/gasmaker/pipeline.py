@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 import json
@@ -11,6 +12,7 @@ from .catalog import HaloCatalog
 from .geometry import (
     halo_center_code,
     halo_radius_code,
+    PeriodicSpatialIndex,
     periodic_boxes,
     sphere_cell_mask,
     periodic_delta,
@@ -300,7 +302,27 @@ class GasMaker:
             return 0.0
         return np.sum(mass[distance < radius])
 
-    def _spherical_overdensity(self, halo, cells, dms, stars, units):
+    def _indexed_rows(self, table, index, center, radius, include_boundary=False):
+        if table is None or len(table) == 0:
+            return table
+        if index is None:
+            return table
+        query_radius = radius
+        if include_boundary:
+            query_radius += self.reader.maximum_cell_half_diagonal
+        return table[index.query(center, query_radius)]
+
+    def _spherical_overdensity(
+        self,
+        halo,
+        cells,
+        dms,
+        stars,
+        units,
+        cell_index=None,
+        dm_index=None,
+        star_index=None,
+    ):
         center = halo_center_code(
             halo, self.catalog.box_physical_mpc, self.catalog.units_version
         )
@@ -308,6 +330,10 @@ class GasMaker:
             halo, self.catalog.box_physical_mpc, self.radius_field,
             units_version=self.catalog.units_version,
         )
+
+        cells = self._indexed_rows(cells, cell_index, center, halo_radius)
+        dms = self._indexed_rows(dms, dm_index, center, halo_radius)
+        stars = self._indexed_rows(stars, star_index, center, halo_radius)
 
         cell_dist = self._distance_to_center(cells, center)
         dm_dist = self._distance_to_center(dms, center)
@@ -436,8 +462,21 @@ class GasMaker:
         )
         return radius_code, mass
 
-    def _apply_tier2(self, output, halo, cells, dms, stars, units):
-        tier2 = self._spherical_overdensity(halo, cells, dms, stars, units)
+    def _apply_tier2(
+        self,
+        output,
+        halo,
+        cells,
+        dms,
+        stars,
+        units,
+        cell_index=None,
+        dm_index=None,
+        star_index=None,
+    ):
+        tier2 = self._spherical_overdensity(
+            halo, cells, dms, stars, units, cell_index, dm_index, star_index
+        )
         for field in ("r200", "m200", "r500", "m500"):
             output[field] = tier2[field]
 
@@ -477,7 +516,29 @@ class GasMaker:
                 output[f"mcold{suffix}"] = np.sum(cell_mass[gas_mask & cold])
                 output[f"mdense{suffix}"] = np.sum(cell_mass[gas_mask & dense])
 
-    def _summarize(self, halo, root_id, cells, dms, stars, units):
+    def _candidate_cells(self, cells, cell_index, center, radius, include_boundary):
+        candidates = self._indexed_rows(
+            cells, cell_index, center, radius, include_boundary=include_boundary
+        )
+        if candidates is None or len(candidates) == 0:
+            return candidates
+        candidate_mask = sphere_cell_mask(
+            candidates, center, radius, include_boundary
+        )
+        return candidates[candidate_mask]
+
+    def _summarize(
+        self,
+        halo,
+        root_id,
+        cells,
+        dms,
+        stars,
+        units,
+        cell_index=None,
+        dm_index=None,
+        star_index=None,
+    ):
         box_physical_mpc = self.catalog.box_physical_mpc
         output = np.zeros((), dtype=SUMMARY_DTYPE)
         output["id"] = halo["id"]
@@ -495,8 +556,9 @@ class GasMaker:
             halo, box_physical_mpc, "rvir",
             units_version=self.catalog.units_version,
         )
-        candidate_mask_rvir = sphere_cell_mask(cells, center_halo, radius_rvir, self.include_boundary)
-        selected_rvir = cells[candidate_mask_rvir]
+        selected_rvir = self._candidate_cells(
+            cells, cell_index, center_halo, radius_rvir, self.include_boundary
+        )
         
         if selected_rvir.size > 0:
             fraction_rvir, lower_rvir, upper_rvir = self._fractional_overlap(
@@ -542,8 +604,9 @@ class GasMaker:
                 radius_r50 = r50_val / box_physical_mpc if (np.isfinite(r50_val) and r50_val > 0) else 0.0
                 radius_r90 = r90_val / box_physical_mpc if (np.isfinite(r90_val) and r90_val > 0) else 0.0
             
-            candidate_mask_rstar = sphere_cell_mask(cells, center_star, radius_rstar, self.include_boundary)
-            selected_rstar = cells[candidate_mask_rstar]
+            selected_rstar = self._candidate_cells(
+                cells, cell_index, center_star, radius_rstar, self.include_boundary
+            )
             
             if selected_rstar.size > 0:
                 fraction_rstar, lower_rstar, upper_rstar = self._fractional_overlap(
@@ -654,7 +717,9 @@ class GasMaker:
                 output["ncells_overlap"] = 0
                 output["overlap_resolved"] = False
         
-        self._apply_tier2(output, halo, cells, dms, stars, units)
+        self._apply_tier2(
+            output, halo, cells, dms, stars, units, cell_index, dm_index, star_index
+        )
         return output
 
     def process_root(self, root_id, read_grav=False, nthread=1):
@@ -730,11 +795,42 @@ class GasMaker:
         read_seconds = time.perf_counter() - started
 
         started = time.perf_counter()
+        cell_index = PeriodicSpatialIndex(read.cells)
+        dm_index = PeriodicSpatialIndex(read.dms) if read.dms is not None else None
+        star_index = PeriodicSpatialIndex(read.stars) if read.stars is not None else None
         results = np.empty(halos.size, dtype=SUMMARY_DTYPE)
-        for index, halo in enumerate(halos):
-            results[index] = self._summarize(
-                halo, root_id, read.cells, read.dms, read.stars, read.units
+        def summarize_at(index):
+            halo = halos[index]
+            return index, self._summarize(
+                halo,
+                root_id,
+                read.cells,
+                read.dms,
+                read.stars,
+                read.units,
+                cell_index,
+                dm_index,
+                star_index,
             )
+
+        worker_count = max(1, min(int(nthread), int(halos.size)))
+        if worker_count == 1:
+            for index, halo in enumerate(halos):
+                results[index] = self._summarize(
+                    halo,
+                    root_id,
+                    read.cells,
+                    read.dms,
+                    read.stars,
+                    read.units,
+                    cell_index,
+                    dm_index,
+                    star_index,
+                )
+        else:
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                for index, record in executor.map(summarize_at, range(halos.size)):
+                    results[index] = record
         compute_seconds = time.perf_counter() - started
         metrics = RootMetrics(
             root_id=root_id,
