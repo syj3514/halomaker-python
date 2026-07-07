@@ -289,6 +289,7 @@ def new_step_1():
         if(H.allocated('id_10')): H.deallocate('id_10')
         if(H.allocated('age_10')): H.deallocate('age_10')
         if(H.allocated('metal_10')): H.deallocate('metal_10')
+        if(H.allocated('chem_10')): H.deallocate('chem_10')
         if(H.allocated('m0_10')): H.deallocate('m0_10')
         if(len(H.liste_halos_o0)>0): H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
         return
@@ -338,6 +339,7 @@ def new_step_1():
         if(H.allocated('mass_10')): H.deallocate('mass_10')
         if(H.allocated('age_10')): H.deallocate('age_10')
         if(H.allocated('metal_10')): H.deallocate('metal_10')
+        if(H.allocated('chem_10')): H.deallocate('chem_10')
         if(H.allocated('m0_10')): H.deallocate('m0_10')
         H.deallocate('whereIam_parts')
         return
@@ -510,6 +512,7 @@ def new_step_1():
     if(H.allocated('mass_10')): H.deallocate('mass_10')
     if(H.allocated('age_10')): H.deallocate('age_10')
     if(H.allocated('metal_10')): H.deallocate('metal_10')
+    if(H.allocated('chem_10')): H.deallocate('chem_10')
     if(H.allocated('m0_10')): H.deallocate('m0_10')
     if(not H.cdm): H.deallocate('density_1312')
 
@@ -1159,8 +1162,17 @@ def det_vir_props_1b4(h:np.void,v,amax=0,bmax=0,cmax=0,ttab=1000, member=None):
        # compute halo density profile within the virialized region
        compute_halo_profile_1b41(h)
     else:
-       print('halo bugged (ID, Mvir, Rvir)',h['id'],mvir,rvir)
-       raise ValueError('at ',h['px'],h['py'],h['pz'])
+       # Non-virialized halo: virial-theorem conditions not met (e.g. a
+       # geometrically degenerate small halo whose ellipsoid axes give rvir=0).
+       # Mark the virial quantities undefined (NaN) and continue, rather than
+       # aborting the whole snapshot. (This branch historically raised a debug
+       # guard; one pathological halo out of thousands must not kill the run.)
+       h['rvir']  = np.float64(np.nan)
+       h['mvir']  = np.float64(np.nan)
+       h['cvel']  = np.float64(np.nan)
+       h['tvir']  = np.float64(np.nan)
+       h['rho_0'] = np.float64(np.nan)
+       h['r_c']   = np.float64(np.nan)
     return amax,bmax,cmax
 
 #***********************************************************************
@@ -1187,7 +1199,9 @@ def det_vir_1b(h:np.void, fagor:FortranFile=None, member=None):
 
     # compute virial properties based on conditions necessary for the virial theorem to apply
     amax,bmax,cmax = det_vir_props_1b4(h,v, member=member)
-    if(H.ANG_MOM_OF_R):
+    # skip per-shell angular momentum for non-virialized halos (rvir=NaN): their
+    # degenerate ellipsoid axes would divide by zero in the shell binning
+    if(H.ANG_MOM_OF_R and np.isfinite(h['rvir'])):
         det_ang_momentum_per_shell_1b5(h,amax,bmax,cmax,v,fagor=fagor, member=member)
         
 
@@ -1769,7 +1783,7 @@ def compute_extended_profiles_1e(h:np.void, member=None):
 
     dmmask = (indexps < H.ndm) & nonzero
     ndm = np.sum(dmmask)
-    if(ndm < 8 or h['rvir'] <= 0):
+    if(ndm < 8 or not (h['rvir'] > 0)):   # rvir<=0 or NaN (non-virialized) → skip NFW fit
         h['cNFW'] = np.float64(np.nan)
         return
 
