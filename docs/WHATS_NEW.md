@@ -40,6 +40,17 @@ HaloMaker alone does not produce.
   time, read/compute totals, slowest root). Progress goes to stderr; stdout
   keeps only the final machine-readable summary. `--progress
   {auto,bar,plain,quiet}` / config `progress`.
+- **Much faster per-halo gas summaries (large clusters).** The per-halo
+  summarize loop used to re-scan the *entire* root cell cloud (hundreds of
+  millions of cells) once per sub-halo and per radius type, single-threaded —
+  fine for small groups but hours-long for a big cluster. It now builds a
+  periodic uniform-grid spatial index once per root and scans only the local
+  candidate cells for each sub-halo, and runs the (independent) sub-halo loop
+  across threads. Output is **bit-identical** (candidates are re-sorted to the
+  original cell order so summation order — and thus every float — is preserved);
+  medium clusters see **~18–40× faster** compute. *(The very largest cluster's
+  main halo is still a work item — its sub-halos span the whole cluster, so the
+  spatial index cannot narrow them; see the roadmap.)*
 - **Accurate cell–sphere overlap, made practical.** Measuring gas in a sphere
   needs the fraction of each boundary AMR cell that lies inside. The exact
   reference (subdivide every boundary cell to octree depth 8) is correct but
