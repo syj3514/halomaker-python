@@ -19,7 +19,6 @@ Runtime Python code:
 - `input_output.py`
 - `chem_species.py` (shared 9-element chemistry list for HaloMaker + GasMaker)
 - `num_rec.py`
-- `hdf_output_example.py`
 - `ssp_photometry.py`
 
 GasMaker (gas post-processor):
@@ -63,6 +62,7 @@ Machine-specific or generated material:
   `resim_masses*.dat`
 - local reference logs and HDF5 catalogs
 - local experiment output directories
+- ignored `runs/` directories for local configs, logs, and generated catalogs
 - active `input_HaloMaker.dat` and `inputfiles_HaloMaker.dat`, because they
   contain environment-specific settings and filesystem paths
 
@@ -87,6 +87,7 @@ Repository metadata not copied:
 - `examples/inputfiles_HaloMaker.dat.example`: sanitized snapshot-list example
 - `examples/input_GasMaker.dat.example`: GasMaker parameter example (config mode)
 - `examples/inputfiles_GasMaker.dat.example`: GasMaker job-list example (config mode)
+- `examples/hdf_output_example.py`: simple HDF5 catalog reader example
 
 ## Still Required Before Public Release
 

@@ -83,11 +83,14 @@ PYTHON=.venv/bin/python bash run.sh
 
 ## Configure
 
-Example input을 repository root로 복사합니다.
+Production run은 Git에서 무시되는 전용 run directory에서 수행하는 것을 권장합니다.
+Example input을 그 directory로 복사합니다.
 
 ```bash
-cp examples/input_HaloMaker.dat.example input_HaloMaker.dat
-cp examples/inputfiles_HaloMaker.dat.example inputfiles_HaloMaker.dat
+mkdir -p runs/my_run
+cd runs/my_run
+cp ../../examples/input_HaloMaker.dat.example input_HaloMaker.dat
+cp ../../examples/inputfiles_HaloMaker.dat.example inputfiles_HaloMaker.dat
 ```
 
 `inputfiles_HaloMaker.dat`를 편집하여 각 active line이 실제 RAMSES snapshot을
@@ -120,10 +123,12 @@ snapshot header를 읽은 뒤 확정됩니다.
 ## Run
 
 ```bash
-bash run.sh
+bash ../../run.sh
 ```
 
-주요 HDF5 catalog output은 `tree_bricks*.h5`로 기록됩니다.
+Run directory는 `runs/<name>/` 아래에 두어 local config, log, 대형 output이 release
+root에 쌓이지 않도록 합니다. `runs/`는 Git에서 무시됩니다. 주요 HDF5 catalog output은
+현재 run directory에 `tree_bricks*.h5`로 기록됩니다.
 
 ### 병렬성 (`nbPes`)
 
@@ -193,6 +198,8 @@ python GasMaker.py
 HaloMaker inputfiles parser와 같은 공백 분리 관례를 따릅니다: 행 선두 `#`/`!`
 주석과 빈 줄만 무시하고, 경로 따옴표는 장식용이며, 공백 포함 경로는 지원하지
 않습니다. 여러 줄은 순차 실행되며, 중복 output filename은 실행 전에 에러 처리됩니다.
+Production run에서는 GasMaker config, log, output도 전용 `runs/<name>/` directory에
+두는 것을 권장합니다.
 
 긴 run은 전 구간 진행 상황을 표시합니다: 시작 배너, 단계별 소요, root별 진행,
 종료 요약(wall time·read/compute 합계·최다 소요 root). 진행 표시는 **stderr**로,
@@ -228,7 +235,7 @@ GasMaker core는 `rur`에 의존하지 않습니다(없어도 설치·import 가
 - `compute_neiKDtree_mod.py`: Python-to-Fortran bridge
 - `compute_adaptahop.f90`: optimized full-box AdaptaHOP extension
 - `compute_adaptahop.pyf`: portable build를 위한 explicit f2py interface
-- `hdf_output_example.py`: 간단한 HDF5 catalog reader example
+- `examples/hdf_output_example.py`: 간단한 HDF5 catalog reader example
 - `ssp_photometry.py`: compact SSP table interpolation
 - `halomaker_data/ssp_tables`: build 시 생성되는 SSP runtime table; Git에서 제외
 - `clean_runtime.sh`: interrupted run을 위한 dry-run / cleanup helper

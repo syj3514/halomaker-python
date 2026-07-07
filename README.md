@@ -83,11 +83,14 @@ PYTHON=.venv/bin/python bash run.sh
 
 ## Configure
 
-Copy the example inputs into the repository root:
+For production runs, create a dedicated ignored run directory and copy the
+example inputs there:
 
 ```bash
-cp examples/input_HaloMaker.dat.example input_HaloMaker.dat
-cp examples/inputfiles_HaloMaker.dat.example inputfiles_HaloMaker.dat
+mkdir -p runs/my_run
+cd runs/my_run
+cp ../../examples/input_HaloMaker.dat.example input_HaloMaker.dat
+cp ../../examples/inputfiles_HaloMaker.dat.example inputfiles_HaloMaker.dat
 ```
 
 Edit `inputfiles_HaloMaker.dat` so that each active line points to an existing
@@ -122,10 +125,13 @@ Recommended print levels:
 ## Run
 
 ```bash
-bash run.sh
+bash ../../run.sh
 ```
 
-The main HDF5 catalog output is written as `tree_bricks*.h5`.
+Run directories should live under `runs/<name>/` so local configs, logs, and
+large outputs do not accumulate in the release root. `runs/` is ignored by Git.
+The main HDF5 catalog output is written in the current run directory as
+`tree_bricks*.h5`.
 
 ### Parallelism (`nbPes`)
 
@@ -217,6 +223,8 @@ the same whitespace-splitting convention as HaloMaker's inputfiles parser:
 leading `#`/`!` comments and blank lines are ignored, quotes around paths are
 decorative, and paths with spaces are not supported. Multiple lines are
 processed sequentially; duplicate output filenames are rejected before running.
+For production use, keep GasMaker config files, logs, and outputs in a dedicated
+`runs/<name>/` directory as well.
 
 Long runs show run-wide progress: a startup banner, stage timings, a per-root
 progress display, and an end summary (wall time, read/compute totals, slowest
@@ -262,7 +270,7 @@ the small `gasmaker.readers.base.CellReader` interface (incl. `read_boxes` and
 - `compute_neiKDtree_mod.py`: Python-to-Fortran bridge
 - `compute_adaptahop.f90`: optimized full-box AdaptaHOP extension
 - `compute_adaptahop.pyf`: explicit f2py interface for portable builds
-- `hdf_output_example.py`: simple HDF5 catalog reader example
+- `examples/hdf_output_example.py`: simple HDF5 catalog reader example
 - `ssp_photometry.py`: compact SSP-table interpolation
 - `halomaker_data/ssp_tables`: generated SSP runtime tables; ignored by Git
 - `clean_runtime.sh`: dry-run / cleanup helper for interrupted runs

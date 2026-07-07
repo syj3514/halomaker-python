@@ -21,7 +21,6 @@ if [[ -n "$PATCH_PATH" && -f "$PATCH_PATH/HaloMaker.py" ]]; then
     ENTRYPOINT="$PATCH_PATH/HaloMaker.py"
 fi
 
-cd "$ROOT"
 echo "Running HaloMaker [branch=${BRANCH}]"
 PYTHONPATH="${PATCH_PATH:+$PATCH_PATH:}$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
     "$PYTHON" "$ENTRYPOINT" 2>&1 | tee "$LOG"
