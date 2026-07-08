@@ -5,45 +5,16 @@ from pathlib import Path
 
 import numpy as np
 
+from _ssp_common import FIELDS, discover_sources, read_table
 
-FIELDS = (
-    "umag", "gmag", "rmag", "imag", "zmag",
-    "Umag", "Bmag", "Vmag", "Kmag",
-)
+
 SOURCE_PATTERN = re.compile(r"^cb2007_lr_BaSeL_m(?P<tag>\d+)_chab_ssp\.1ABmag$")
-METALLICITY_PATTERN = re.compile(r"\bZ\s*=\s*([0-9.eE+-]+)")
-
-
-def _read_table(path):
-    lines = path.read_text().splitlines()
-    header = next(i for i, line in enumerate(lines) if line.startswith("#log"))
-    names = lines[header][1:].split()
-    return np.genfromtxt(path, names=names, skip_header=header)
-
-
-def _read_metallicity(path):
-    with path.open() as handle:
-        for line in handle:
-            match = METALLICITY_PATTERN.search(line)
-            if match:
-                return float(match.group(1))
-    raise ValueError(f"Could not find metallicity Z=... in {path}")
 
 
 def _discover_sources(source_dir):
-    if not source_dir.is_dir():
-        return []
-    pairs = []
-    for ab_path in source_dir.glob("cb2007_lr_BaSeL_m*_chab_ssp.1ABmag"):
-        match = SOURCE_PATTERN.match(ab_path.name)
-        if not match:
-            continue
-        tag = int(match.group("tag"))
-        color_path = ab_path.with_suffix(".1color")
-        if not color_path.is_file():
-            raise SystemExit(f"Missing CB07 color table for {ab_path}: {color_path}")
-        pairs.append((tag, _read_metallicity(ab_path), ab_path, color_path))
-    return sorted(pairs, key=lambda item: item[0])
+    return discover_sources(
+        source_dir, "cb2007_lr_BaSeL_m*_chab_ssp.1ABmag", SOURCE_PATTERN, "CB07"
+    )
 
 
 def _find_source_dir(source):
@@ -67,8 +38,8 @@ def _build_grid(source_dir):
     if not sources:
         raise SystemExit(f"No CB07 source table pairs found in {source_dir}")
     for tag, metallicity, ab_path, color_path in sources:
-        ab = _read_table(ab_path)
-        colors = _read_table(color_path)
+        ab = read_table(ab_path)
+        colors = read_table(color_path)
 
         if len(ab) != len(colors):
             raise ValueError(f"Row count mismatch for {ab_path} and {color_path}")

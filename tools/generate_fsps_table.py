@@ -7,13 +7,11 @@ import tempfile
 
 import numpy as np
 
+from _ssp_common import FIELDS
+
 
 AB_BANDS = ("sdss_u", "sdss_g", "sdss_r", "sdss_i", "sdss_z")
 VEGA_BANDS = ("u", "b", "v", "2mass_ks")
-FIELDS = (
-    "umag", "gmag", "rmag", "imag", "zmag",
-    "Umag", "Bmag", "Vmag", "Kmag",
-)
 FSPS_COMMIT = "82a873508d500ca353bbb922459bf928498f7a72"
 
 
