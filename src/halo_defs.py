@@ -131,7 +131,7 @@ def deallocate(*names):
             del mem_address[name]
         else:
             print(f"\t@Memory address `{name}` does not exist")
-    if(list(mem.keys())==0):
+    if(len(mem)==0):
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
