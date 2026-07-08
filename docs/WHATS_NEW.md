@@ -48,9 +48,10 @@ HaloMaker alone does not produce.
   candidate cells for each sub-halo, and runs the (independent) sub-halo loop
   across threads. Output is **bit-identical** (candidates are re-sorted to the
   original cell order so summation order — and thus every float — is preserved);
-  medium clusters see **~18–40× faster** compute. *(The very largest cluster's
-  main halo is still a work item — its sub-halos span the whole cluster, so the
-  spatial index cannot narrow them; see the roadmap.)*
+  medium clusters see **~18–40× faster** compute, and even the
+  largest cluster's main halo (3394 sub-halos, ~70 M cells) now finishes in about
+  an hour, so a full cluster-box run completes in a handful of hours instead of
+  stalling overnight.
 - **Accurate cell–sphere overlap, made practical.** Measuring gas in a sphere
   needs the fraction of each boundary AMR cell that lies inside. The exact
   reference (subdivide every boundary cell to octree depth 8) is correct but
