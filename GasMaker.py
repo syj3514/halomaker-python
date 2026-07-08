@@ -130,6 +130,10 @@ def _run_job(args):
     if args.output is None:
         args.output = Path(f"gas_bricks{args.iout:05d}.h5")
 
+    # Config-mode provenance paths (set by _run_config_mode; "" in CLI mode).
+    config_param_path = getattr(args, "_config_param_path", "")
+    config_inputfiles_path = getattr(args, "_config_inputfiles_path", "")
+
     progress = Progress(
         mode=getattr(args, "progress", "auto"),
         every=getattr(args, "progress_every", 1),
@@ -187,6 +191,8 @@ def _run_job(args):
         status = maker.process_roots(
             root_ids,
             args.output,
+            config_param_path=config_param_path,
+            config_inputfiles_path=config_inputfiles_path,
             overwrite=args.overwrite,
             read_grav=args.read_grav,
             nthread=args.nthread,
@@ -225,6 +231,9 @@ def _run_config_mode(parser):
     defaults = parser.parse_args(["__catalog__", "__repo__", "0"])
     for job in jobs:
         args = SimpleNamespace(**vars(defaults))
+        # Pass absolute paths of the config files used, for header provenance.
+        args._config_param_path = str(Path(PARAM_FILE).resolve())
+        args._config_inputfiles_path = str(Path(INPUTFILES_FILE).resolve())
         args.catalog = job.catalog
         args.repo = job.repo
         args.iout = job.iout

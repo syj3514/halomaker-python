@@ -84,6 +84,13 @@ def _coerce_value(key: str, value: str):
         return value
     if key in {"read_grav", "overwrite"}:
         return _parse_bool(value, key=key)
+    if key == "roots":
+        allowed = ("all",)
+        if value not in allowed:
+            raise ValueError(
+                f"{PARAM_FILE}: key 'roots' expects one of {allowed}, got {value!r}"
+            )
+        return value
     if key == "root_ids":
         return _parse_root_ids(value)
     if key == "rur_path" and value == "":

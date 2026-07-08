@@ -104,6 +104,9 @@ ROOT_METRICS_DTYPE = np.dtype([
     ("compute_seconds", "f8"),
 ])
 
+# SCHEMA_VERSION is the resume-compatibility gate (see _require_compatible_output).
+# Pure additive header attrs (e.g. provenance fields) do NOT require a bump — bumping
+# would only break resume of existing v3 files with zero benefit.
 SCHEMA_VERSION = 3
 UNITS_VERSION = "halomaker_units_v2"
 GAS_FIELD_UNITS = {
@@ -854,7 +857,8 @@ class GasMaker:
                 full[field] = 0
         return full
 
-    def _write_common_header(self, header, run_mode, requested_root_ids):
+    def _write_common_header(self, header, run_mode, requested_root_ids,
+                             config_param_path="", config_inputfiles_path=""):
         header.attrs["schema_version"] = SCHEMA_VERSION
         header.attrs["units_version"] = UNITS_VERSION
         header.attrs["source_catalog_units_version"] = self.catalog.units_version
@@ -872,6 +876,10 @@ class GasMaker:
         header.attrs["dense_nH_per_cc"] = 5.0
         header.attrs["so_overdensities_x_rhocrit"] = np.asarray([200.0, 500.0])
         header.attrs["run_mode"] = run_mode
+        # Config-mode provenance: absolute paths of the two config files used.
+        # Empty string ("") when invoked via CLI (no config files).
+        header.attrs["config_param_path"] = config_param_path
+        header.attrs["config_inputfiles_path"] = config_inputfiles_path
         header.attrs["requested_root_ids"] = np.asarray(
             requested_root_ids, dtype=np.int32
         )
@@ -881,10 +889,13 @@ class GasMaker:
         header.attrs["total_read_seconds"] = 0.0
         header.attrs["total_compute_seconds"] = 0.0
 
-    def _create_output(self, output_path, root_ids, run_mode):
+    def _create_output(self, output_path, root_ids, run_mode,
+                       config_param_path="", config_inputfiles_path=""):
         with h5py.File(output_path, "w") as hdf:
             header = hdf.create_group("header")
-            self._write_common_header(header, run_mode, root_ids)
+            self._write_common_header(header, run_mode, root_ids,
+                                      config_param_path=config_param_path,
+                                      config_inputfiles_path=config_inputfiles_path)
             gas = hdf.create_group("gas")
             gas.attrs["row_alignment"] = "/catalog/halo"
             gas.attrs["completion_authority"] = "/gas/root_metrics"
@@ -932,13 +943,16 @@ class GasMaker:
         if gas["root_metrics"].dtype != ROOT_METRICS_DTYPE:
             raise ValueError("Output /gas/root_metrics dtype does not match current schema")
 
-    def initialize_output(self, output_path, root_ids, overwrite=False, run_mode="multi_root"):
+    def initialize_output(self, output_path, root_ids, overwrite=False, run_mode="multi_root",
+                          config_param_path="", config_inputfiles_path=""):
         output_path = Path(output_path)
         if output_path.exists() and overwrite:
             output_path.unlink()
         if not output_path.exists():
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            self._create_output(output_path, root_ids, run_mode)
+            self._create_output(output_path, root_ids, run_mode,
+                                config_param_path=config_param_path,
+                                config_inputfiles_path=config_inputfiles_path)
         else:
             with h5py.File(output_path, "r+") as hdf:
                 self._require_compatible_output(hdf)
@@ -987,6 +1001,8 @@ class GasMaker:
         self,
         root_ids,
         output_path,
+        config_param_path="",
+        config_inputfiles_path="",
         overwrite=False,
         read_grav=False,
         nthread=1,
@@ -995,7 +1011,9 @@ class GasMaker:
         progress=None,
     ):
         root_ids = [int(root_id) for root_id in root_ids]
-        self.initialize_output(output_path, root_ids, overwrite=overwrite)
+        self.initialize_output(output_path, root_ids, overwrite=overwrite,
+                               config_param_path=config_param_path,
+                               config_inputfiles_path=config_inputfiles_path)
         completed = self.completed_roots(output_path)
         if progress is not None:
             already_done = sum(1 for root_id in root_ids if root_id in completed)
