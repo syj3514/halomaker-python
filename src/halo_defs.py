@@ -52,6 +52,8 @@ def write_manifest(info=None):
     leaves it behind as a breadcrumb for clean_runtime.sh. Never raises — a failure here
     must never break a science run."""
     global _manifest_path
+    if _manifest_path is not None:
+        return  # idempotent: this run already registered a manifest — never overwrite it
     try:
         shm_dir = "/dev/shm"
         if not os.path.isdir(shm_dir):
@@ -78,7 +80,10 @@ def write_manifest(info=None):
         _manifest_path = path
         atexit.register(_unlink_manifest)
     except Exception:
-        _manifest_path = None
+        # Best-effort: never clobber a previously-set _manifest_path. If this is the
+        # first (failed) call, _manifest_path was already None; if a prior call
+        # succeeded we returned early above, so a later failure can't reach here.
+        pass
 
 def _unlink_manifest():
     """Remove the manifest on normal/handled exit. Idempotent, never raises."""
