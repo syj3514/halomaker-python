@@ -246,6 +246,18 @@ everything above:
   aggregation, or a parallel merge-tree reformulation) — deferred as a future
   `create_optimized_nodes`, built alongside the current path, when very large runs
   make it worthwhile.
+- **`create nodes` acceleration — now available as opt-in `optimize_nodes`.**  **[released, TASK-28c]**
+  Set `optimize_nodes = .true.` in `input_HaloMaker.dat` (default `.false.` = the
+  classic path, untouched). Large / threshold-far components are summarized through
+  a per-group **blocked prefix-moment index** — density-desc sorted particles with
+  cumulative moments stored every K=16 particles, so each threshold level is an
+  O(log n) lookup plus a short residual sum instead of the ~52× per-level rescan.
+  Small (`< 1000` particles) and threshold-near components fall back to the exact
+  legacy `treat_particles`, so the output stays **bit-for-bit on the golden**
+  (`real_regression=0`, membership 2000/2000 and 13419/13419 identical, determinism
+  opt#1==opt#2). On a 39990 full box the step drops **1428 s → 102 s (≈14×)** at
+  **+4.8 MB** peak memory. (A 3-way competitive round merged the winning traits:
+  blocked-prefix speed/memory + small-component exact fallback for zero flips.)
 
 ---
 

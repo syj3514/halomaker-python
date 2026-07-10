@@ -146,7 +146,16 @@ algorithmic limit, not a tuning gap — the node tree is built by a sequential
 density-percolation of the most massive structure (a data-dependency chain), and
 on the 07206 box the single largest halo alone is ~69% of that step, capping any
 same-output parallel speedup at ≈1.45×. Reducing it requires an output-changing
-algorithm change (see project notes), not more threads.
+algorithm change, not more threads.
+
+Setting `optimize_nodes = .true.` in `input_HaloMaker.dat` (default `.false.` =
+classic path) enables such a path: large components are summarized through a
+per-group **blocked prefix-moment index** (replacing the per-level rescan with
+O(log n) lookups), while small (`< 1000` particles) and threshold-near components
+fall back to the exact legacy computation, so the catalog stays **bit-for-bit on
+the classic output** (verified `real_regression=0` on the frozen goldens). On a
+39990 full box this cuts the `create nodes` step from ~1428 s to ~102 s (≈14×) at
+**+4.8 MB** peak memory.
 
 ### Output units (breaking change: `halomaker_units_v2`)
 
