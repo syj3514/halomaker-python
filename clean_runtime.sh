@@ -76,20 +76,80 @@ else
     fi
 fi
 
-mapfile -t SHM_FILES < <(
-    find /dev/shm -maxdepth 1 -user "$(id -un)" \
-        \( -name 'HaloMaker_*' -o -name 'psm_*' \) -print 2>/dev/null | sort
-)
+# Shared-memory sweep. Files created by this pipeline are named
+#   HaloMaker_u<uid>_t<time>_p<pid>_s<starttime>_<array>
+# plus a co-located  ..._MANIFEST  breadcrumb. The (pid, starttime) pair is unique per
+# host across time, so we can tell a DEAD orphan (owning process gone / PID recycled)
+# from a LIVE run (process still running with the same start-time). Dead orphans are
+# auto-removed even in dry-run mode — they are provably safe. Live runs are NEVER
+# touched automatically (only --force, which first kills the process). Legacy files
+# with no _p<pid>_s<starttime>_ tag can't be liveness-judged, so they keep the old
+# semantics: listed in dry-run, removed only with --force.
+SHM_CLASSIFY="$(
+python - <<'PY'
+import os, re, glob
+uid = os.getuid()
+pat = re.compile(r'_p(\d+)_s(\d+)_')
 
-if [[ "${#SHM_FILES[@]}" -eq 0 ]]; then
-    echo "[clean] no matching shared-memory files"
-else
-    printf '[clean] matching shared-memory files:\n'
-    printf '  %s\n' "${SHM_FILES[@]}"
+def alive(pid, starttime):
+    try:
+        with open(f"/proc/{pid}/stat") as fh:
+            data = fh.read()
+        return data[data.rindex(")") + 2:].split()[19] == starttime
+    except (OSError, IndexError, ValueError):
+        return False
+
+for path in sorted(glob.glob("/dev/shm/HaloMaker_*") + glob.glob("/dev/shm/psm_*")):
+    try:
+        if os.stat(path).st_uid != uid:
+            continue
+    except OSError:
+        continue
+    m = pat.search(os.path.basename(path))
+    if not m:
+        print("UNKNOWN\t" + path)
+    else:
+        print(("LIVE" if alive(m.group(1), m.group(2)) else "DEAD") + "\t" + path)
+PY
+)"
+
+SHM_DEAD=(); SHM_LIVE=(); SHM_UNKNOWN=()
+while IFS=$'\t' read -r cls path; do
+    [[ -z "$path" ]] && continue
+    case "$cls" in
+        DEAD)    SHM_DEAD+=("$path") ;;
+        LIVE)    SHM_LIVE+=("$path") ;;
+        UNKNOWN) SHM_UNKNOWN+=("$path") ;;
+    esac
+done <<< "$SHM_CLASSIFY"
+
+if [[ "${#SHM_LIVE[@]}" -gt 0 ]]; then
+    echo "[clean] live-run shared-memory (owning process alive — NOT touched):"
+    printf '  %s\n' "${SHM_LIVE[@]}"
     if [[ "$FORCE" == 1 ]]; then
-        rm -f -- "${SHM_FILES[@]}"
-        echo "[clean] removed matching shared-memory files"
-    else
-        echo "[clean] dry-run only; use --force to remove them"
+        rm -f -- "${SHM_LIVE[@]}"
+        echo "[clean] --force: removed live-run shared-memory (process was killed above)"
     fi
+fi
+
+if [[ "${#SHM_DEAD[@]}" -gt 0 ]]; then
+    echo "[clean] dead-orphan shared-memory (owning process gone — auto-removing):"
+    printf '  %s\n' "${SHM_DEAD[@]}"
+    rm -f -- "${SHM_DEAD[@]}"
+    echo "[clean] removed ${#SHM_DEAD[@]} dead-orphan shared-memory file(s)"
+fi
+
+if [[ "${#SHM_UNKNOWN[@]}" -gt 0 ]]; then
+    echo "[clean] untagged/legacy shared-memory (liveness unknown):"
+    printf '  %s\n' "${SHM_UNKNOWN[@]}"
+    if [[ "$FORCE" == 1 ]]; then
+        rm -f -- "${SHM_UNKNOWN[@]}"
+        echo "[clean] --force: removed untagged/legacy shared-memory files"
+    else
+        echo "[clean] dry-run only; use --force to remove untagged/legacy files"
+    fi
+fi
+
+if [[ "${#SHM_DEAD[@]}" -eq 0 && "${#SHM_LIVE[@]}" -eq 0 && "${#SHM_UNKNOWN[@]}" -eq 0 ]]; then
+    echo "[clean] no matching shared-memory files"
 fi

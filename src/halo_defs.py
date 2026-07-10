@@ -4,7 +4,7 @@ from collections import defaultdict
 from scipy.io import FortranFile
 import time
 import atexit, signal
-import sys, os
+import sys, os, json
 
 from chem_species import CHEM_STAR_FIELDS
 
@@ -25,10 +25,71 @@ FORTRAN = True
 #======================================================================
 # Memory allocation
 #======================================================================
-mprefix = ["HaloMaker", "uNone", "tNone"] # Halo/Galaxy, uid, runtime
+mprefix = ["HaloMaker", "uNone", "tNone", "pNone_sNone"] # Halo/Galaxy, uid, runtime, proc(pid+starttime)
 def collapse_mprefix():
     global mprefix
     return "_".join([i for i in mprefix])
+
+def _proc_starttime(pid="self"):
+    """Kernel start-time (clock ticks since boot) of a process, from /proc/<pid>/stat.
+    It is field 22 of stat; we parse *after* the comm field (rindex of ')') so a comm
+    containing ')' is handled. The (pid, start-time) pair is unique per host across time,
+    so it disambiguates a recycled PID — the basis for live-vs-orphan shm judgement.
+    Returns None (str "None" when interpolated) if unavailable."""
+    try:
+        with open(f"/proc/{pid}/stat", "r") as fh:
+            data = fh.read()
+        return data[data.rindex(")") + 2:].split()[19]
+    except (OSError, IndexError, ValueError):
+        return None
+
+_manifest_path = None
+
+def write_manifest(info=None):
+    """Best-effort breadcrumb sidecar co-located with this run's shm segments in /dev/shm.
+    Named '<collapsed-prefix>_MANIFEST' so it sorts next to the run's shm files; a normal
+    or signal-handled exit unlinks it (see _unlink_manifest / flush), while a hard kill
+    leaves it behind as a breadcrumb for clean_runtime.sh. Never raises — a failure here
+    must never break a science run."""
+    global _manifest_path
+    try:
+        shm_dir = "/dev/shm"
+        if not os.path.isdir(shm_dir):
+            return
+        path = os.path.join(shm_dir, collapse_mprefix() + "_MANIFEST")
+        payload = {
+            "pid": os.getpid(),
+            "starttime": _proc_starttime(),
+            "host": os.uname().nodename,
+            "uid": os.getuid(),
+            "start_iso": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+            "cwd": os.getcwd(),
+            "prefix": collapse_mprefix(),
+            "argv": sys.argv,
+        }
+        if info:
+            payload.update(info)
+        # 0600 + O_EXCL: same trust model as the shm segments themselves.
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            os.write(fd, json.dumps(payload, default=str).encode())
+        finally:
+            os.close(fd)
+        _manifest_path = path
+        atexit.register(_unlink_manifest)
+    except Exception:
+        _manifest_path = None
+
+def _unlink_manifest():
+    """Remove the manifest on normal/handled exit. Idempotent, never raises."""
+    global _manifest_path
+    if _manifest_path is None:
+        return
+    try:
+        os.unlink(_manifest_path)
+    except OSError:
+        pass
+    _manifest_path = None
 mem = {}
 mem_address = {}
 globvars = {}
@@ -140,6 +201,7 @@ def flush(msg=True, parent=''):
     signal.signal(signal.SIGINT, signal.SIG_DFL)
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
+    _unlink_manifest()
     if(len(mem_address) > 0):
         if(msg or DEV): print(f"\t@{parent} Clearing memory")
         if(msg or DEV): print(f"\t   {[i[0].name for i in mem_address.values()]}")

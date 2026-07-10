@@ -227,6 +227,10 @@ def init_cosmo_01():
     H.mprefix[2] = time.strftime("t%Y%m%d_%H%M%S", time.localtime())
     if H.prefix != "":
         H.mprefix[2] = f"{H.mprefix[2]}{H.prefix}"
+    # (pid, start-time) makes the shm prefix collision-free across concurrent runs and
+    # lets clean_runtime.sh tell a live run from a dead orphan. Drop a manifest breadcrumb.
+    H.mprefix[3] = f"p{os.getpid()}_s{H._proc_starttime()}"
+    H.write_manifest({"snapshot": getattr(H, "numstep", None), "prefix_tag": H.prefix})
 
 
 def _compute_halo_props(ih1, member, fagor, printdatacheckhalo):
