@@ -168,13 +168,21 @@ Run이 Ctrl-C로 interrupt되었거나 scheduler에 의해 kill되었거나 Pyth
 leftover를 확인하고 정리할 수 있습니다.
 
 ```bash
-bash clean_runtime.sh
-bash clean_runtime.sh --force
+bash clean_runtime.sh            # dry-run: 목록만, 아무것도 삭제 안 함
+bash clean_runtime.sh --orphan   # 죽은 orphan shm만 안전 회수
+bash clean_runtime.sh --force    # 이 repo의 runtime 프로세스 종료 후 회수
 ```
 
-첫 번째 명령은 dry run입니다. `--force` 명령은 이 repository의 HaloMaker
-runtime process 중 matching되는 항목을 종료하고, 현재 user가 소유한 matching
-shared memory file을 제거합니다.
+shared-memory 파일은 소유 run의 `(pid, start-time)`으로 태그되므로, helper가 각
+파일을 **DEAD**(소유 프로세스 종료 / PID 재활용 / zombie), **LIVE**(프로세스 생존),
+**UNKNOWN**(태그 없는 legacy·generic, 예: `psm_*`)으로 분류합니다. 인자 없는 명령은
+진짜 dry-run(아무것도 삭제 안 함)입니다. `--orphan`은 DEAD orphan(과 그 manifest)만
+제거하고 LIVE·UNKNOWN은 건드리지 않습니다. `--force`는 **이 repository의 runtime
+프로세스만** 먼저 종료한 뒤 재분류하여 그때 DEAD가 된 세그먼트 + UNKNOWN/legacy를
+제거합니다. 다른 워킹트리·다른 에이전트가 소유한 LIVE run은 여기서 종료되지 않으므로
+**절대 삭제되지 않습니다** — "살아있는 run은 건드리지 않는다" 불변식이 `--force`에서도
+유지됩니다. (DEAD 판정은 소유 PID 기준이며, hard-kill된 run이 잠깐 남긴 fork child가
+세그먼트를 매핑 중이어도 unlink는 이름만 제거하고 기존 매핑은 유효합니다.)
 
 ## GasMaker (가스 후처리기)
 

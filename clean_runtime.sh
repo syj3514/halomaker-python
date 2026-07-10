@@ -3,24 +3,55 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FORCE=0
-if [[ "${1:-}" == "--force" ]]; then
-    FORCE=1
-elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    cat <<'EOF'
+ORPHAN=0
+case "${1:-}" in
+    --force)  FORCE=1 ;;
+    --orphan) ORPHAN=1 ;;
+    "")       ;;  # bare: true dry-run, deletes nothing
+    -h|--help)
+        cat <<'EOF'
 Usage:
-  bash clean_runtime.sh
-  bash clean_runtime.sh --force
+  bash clean_runtime.sh            # dry-run: list only, delete NOTHING
+  bash clean_runtime.sh --orphan   # safe mode: reclaim provably-dead orphan shm only
+  bash clean_runtime.sh --force    # aggressive: kill this repo's runtime procs, then reclaim
 
-Without --force, this script only lists HaloMaker-related runtime leftovers.
-With --force, it terminates matching processes and removes HaloMaker shared
-memory files owned by the current user.
+Shared-memory files are named  HaloMaker_u<uid>_t<time>_p<pid>_s<starttime>_<array>
+(+ a co-located ..._MANIFEST breadcrumb). The (pid, starttime) pair is unique per host
+across time, so a segment is classified as:
+  DEAD    owning process gone / PID recycled (starttime mismatch) / zombie  -> orphan
+  LIVE    owning process still running with the same start-time            -> a real run
+  UNKNOWN legacy / generic (no _p<pid>_s<starttime>_ tag, e.g. psm_*)       -> can't judge
+
+Deletion policy:
+  dry-run  : nothing removed (lists what --orphan / --force would do)
+  --orphan : DEAD orphans (+their manifest) removed; LIVE and UNKNOWN untouched
+  --force  : kills this repository's runtime processes FIRST, re-classifies, then removes
+             the now-DEAD segments plus UNKNOWN/legacy files. A LIVE run owned by another
+             working tree / another agent is never killed here and is therefore never
+             removed — the "never touch a live run" invariant holds under --force too.
+
+Note: DEAD is judged on the owning (parent) PID. A hard-killed run may briefly leave a
+fork child mapping the segment; unlinking only drops the name (existing mappings stay
+valid, no crash), but "owner PID gone" is not strictly identical to "logical run fully
+ended".
 EOF
-    exit 0
-fi
+        exit 0 ;;
+    *)
+        echo "clean_runtime.sh: unknown option '$1' (see --help)" >&2
+        exit 2 ;;
+esac
 
+# --force also reclaims dead orphans (after killing this repo's procs turns them dead).
+RECLAIM_DEAD=0
+[[ "$FORCE" == 1 || "$ORPHAN" == 1 ]] && RECLAIM_DEAD=1
+
+MODE=dry-run
+[[ "$ORPHAN" == 1 ]] && MODE=orphan
+[[ "$FORCE" == 1 ]] && MODE=force
 echo "[clean] repository: $ROOT"
-echo "[clean] mode: $([[ "$FORCE" == 1 ]] && echo force || echo dry-run)"
+echo "[clean] mode: $MODE"
 
+# --- runtime processes (only --force kills, and only this repository's own runs) ---
 mapfile -t PIDS < <(
 python - "$ROOT" <<'PY'
 import os
@@ -65,26 +96,20 @@ PY
 if [[ "${#PIDS[@]}" -eq 0 ]]; then
     echo "[clean] no matching runtime processes"
 else
-    echo "[clean] matching runtime process IDs: ${PIDS[*]}"
+    echo "[clean] matching runtime process IDs (this repository): ${PIDS[*]}"
     if [[ "$FORCE" == 1 ]]; then
         kill "${PIDS[@]}" 2>/dev/null || true
         sleep 1
         kill -9 "${PIDS[@]}" 2>/dev/null || true
         echo "[clean] terminated matching processes"
     else
-        echo "[clean] dry-run only; use --force to terminate them"
+        echo "[clean] not terminated; use --force to terminate them"
     fi
 fi
 
-# Shared-memory sweep. Files created by this pipeline are named
-#   HaloMaker_u<uid>_t<time>_p<pid>_s<starttime>_<array>
-# plus a co-located  ..._MANIFEST  breadcrumb. The (pid, starttime) pair is unique per
-# host across time, so we can tell a DEAD orphan (owning process gone / PID recycled)
-# from a LIVE run (process still running with the same start-time). Dead orphans are
-# auto-removed even in dry-run mode — they are provably safe. Live runs are NEVER
-# touched automatically (only --force, which first kills the process). Legacy files
-# with no _p<pid>_s<starttime>_ tag can't be liveness-judged, so they keep the old
-# semantics: listed in dry-run, removed only with --force.
+# --- shared-memory sweep. Classified AFTER the (optional) kill above, so a run this
+# repo just terminated is now judged DEAD and reclaimed, while a LIVE run owned by
+# some other working tree / agent (which we never killed) stays LIVE and is preserved. ---
 SHM_CLASSIFY="$(
 python - <<'PY'
 import os, re, glob
@@ -92,10 +117,16 @@ uid = os.getuid()
 pat = re.compile(r'_p(\d+)_s(\d+)_')
 
 def alive(pid, starttime):
+    """Live iff /proc/<pid>/stat is readable, not a zombie, and its start-time
+    (field 22) matches — so a recycled PID or a just-killed zombie reads as dead."""
     try:
         with open(f"/proc/{pid}/stat") as fh:
             data = fh.read()
-        return data[data.rindex(")") + 2:].split()[19] == starttime
+        fields = data[data.rindex(")") + 2:].split()
+        state = fields[0]        # field 3
+        if state == "Z":         # zombie: owning process has exited
+            return False
+        return fields[19] == starttime  # field 22: kernel start-time
     except (OSError, IndexError, ValueError):
         return False
 
@@ -123,22 +154,26 @@ while IFS=$'\t' read -r cls path; do
     esac
 done <<< "$SHM_CLASSIFY"
 
+# LIVE: never removed by any mode. Reported so the operator knows a run is active.
 if [[ "${#SHM_LIVE[@]}" -gt 0 ]]; then
-    echo "[clean] live-run shared-memory (owning process alive — NOT touched):"
+    echo "[clean] live-run shared-memory (owning process alive — preserved, never removed):"
     printf '  %s\n' "${SHM_LIVE[@]}"
-    if [[ "$FORCE" == 1 ]]; then
-        rm -f -- "${SHM_LIVE[@]}"
-        echo "[clean] --force: removed live-run shared-memory (process was killed above)"
+fi
+
+# DEAD orphans: removed by --orphan and --force; only listed in dry-run.
+if [[ "${#SHM_DEAD[@]}" -gt 0 ]]; then
+    if [[ "$RECLAIM_DEAD" == 1 ]]; then
+        echo "[clean] dead-orphan shared-memory (owning process gone — reclaiming):"
+        printf '  %s\n' "${SHM_DEAD[@]}"
+        rm -f -- "${SHM_DEAD[@]}"
+        echo "[clean] reclaimed ${#SHM_DEAD[@]} dead-orphan shared-memory file(s)"
+    else
+        echo "[clean] dead-orphan shared-memory (would reclaim; use --orphan or --force):"
+        printf '  %s\n' "${SHM_DEAD[@]}"
     fi
 fi
 
-if [[ "${#SHM_DEAD[@]}" -gt 0 ]]; then
-    echo "[clean] dead-orphan shared-memory (owning process gone — auto-removing):"
-    printf '  %s\n' "${SHM_DEAD[@]}"
-    rm -f -- "${SHM_DEAD[@]}"
-    echo "[clean] removed ${#SHM_DEAD[@]} dead-orphan shared-memory file(s)"
-fi
-
+# UNKNOWN/legacy: can't judge liveness, so only --force removes them.
 if [[ "${#SHM_UNKNOWN[@]}" -gt 0 ]]; then
     echo "[clean] untagged/legacy shared-memory (liveness unknown):"
     printf '  %s\n' "${SHM_UNKNOWN[@]}"
@@ -146,7 +181,7 @@ if [[ "${#SHM_UNKNOWN[@]}" -gt 0 ]]; then
         rm -f -- "${SHM_UNKNOWN[@]}"
         echo "[clean] --force: removed untagged/legacy shared-memory files"
     else
-        echo "[clean] dry-run only; use --force to remove untagged/legacy files"
+        echo "[clean] not removed; use --force to remove untagged/legacy files"
     fi
 fi
 

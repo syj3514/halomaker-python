@@ -194,13 +194,22 @@ If a run is interrupted with Ctrl-C, killed by a scheduler, or leaves Python
 leftovers with:
 
 ```bash
-bash clean_runtime.sh
-bash clean_runtime.sh --force
+bash clean_runtime.sh            # dry-run: list only, delete nothing
+bash clean_runtime.sh --orphan   # reclaim provably-dead orphan shm only
+bash clean_runtime.sh --force    # kill this repo's runtime procs, then reclaim
 ```
 
-The first command is a dry run. The `--force` command terminates matching
-HaloMaker runtime processes in this repository and removes matching shared
-memory files owned by the current user.
+Shared-memory files are tagged with the owning run's `(pid, start-time)`, so the
+helper classifies each as **DEAD** (owning process gone / PID recycled / zombie),
+**LIVE** (process still running), or **UNKNOWN** (legacy/generic, e.g. `psm_*`).
+The bare command is a true dry-run (deletes nothing). `--orphan` removes only
+DEAD orphans (and their manifest), never touching LIVE or UNKNOWN files. `--force`
+first terminates this repository's own runtime processes, re-classifies, then
+removes the now-DEAD segments plus UNKNOWN/legacy files. A LIVE run owned by
+another working tree or agent is never killed here, so it is never removed — the
+"never touch a live run" invariant holds even under `--force`. (DEAD is judged on
+the owning PID; a hard-killed run may briefly leave a fork child mapping the
+segment, but unlinking only drops the name and leaves existing mappings valid.)
 
 ## GasMaker (gas post-processor)
 
