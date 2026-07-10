@@ -482,6 +482,7 @@ group:list['grp'] = []
 # Flags for halo finder selection
 #======================================================================
 method = 'MSM' # flag to notify which and how the halofinder is to be used
+optimize_nodes = False # TASK-28: opt-in incremental create_nodes path (default off = classic path)
 fsub = False # flag to notify whether subhaloes are included
 cdm = False # flag to select particle closest to the cdm instead of the one with the highest density
 DPMMC = False # flag to select the densest particle in the most massive cell of the halo (not with FOF)
@@ -559,6 +560,7 @@ PARAMS = {
     'fudge':          (['fudge'],                                  np.float64),
     'fudgepsilon':    (['fudgepsilon'],                            np.float64),
     'alphap':         (['alphap'],                                 np.float64),
+    'optimize_nodes': (['optimize_nodes'],                          fbool),
 
     'verbose':        (['verbose'],                                fbool),
     'megaverbose':    (['megaverbose'],                            fbool),

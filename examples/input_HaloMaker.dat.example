@@ -17,6 +17,7 @@ rhot           =  80.0    ! parameter for adaptahop (80 coreespond to b = 0.2)
 fudge          = 4.       ! parameter for adaptahop (usually 4.) 
 fudgepsilon    = 0.001    ! parameter for adaptahop (usually 0.05)
 alphap         = 1.0      ! parameter for adaptahop (usually 1.)
+optimize_nodes = .false.  ! TASK-28: .true. = opt-in incremental create_nodes path (field-policy identical, faster). default .false. = classic path.
 verbose        = .true.   ! verbose parameter for both halo finder
 megaverbose    = .false.  ! parameter for adaptahop
 nsteps         =  200     ! Number of time steps to analyse

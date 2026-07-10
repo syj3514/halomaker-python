@@ -116,6 +116,21 @@ module fhalo_defs
    integer(kind=4), allocatable :: color(:)
    ! integer(kind=4), allocatable :: partnode(:)
    real(kind=8), allocatable    :: densityg(:)
+   ! TASK-28 (PL) opt path: per-group density-desc sorted particles + prefix moments
+   ! TASK-28b: BLOCKED/SPARSE prefix — cumulative moments stored only every opt_bk
+   !   particles (block boundaries); a query rebuilds the exact value as
+   !   block-boundary cumulative + residual direct-sum over the last (<opt_bk)
+   !   particles. Same sequential summation order as the full prefix => bit-identical.
+   !   Memory: full 52 B/particle -> ~ 4 B/particle (pid) + 48/opt_bk B/particle.
+   integer(kind=4), parameter   :: opt_bk = 16          ! block size K
+   integer(kind=4), allocatable :: opt_off(:)           ! per-group particle offset
+   integer(kind=4), allocatable :: opt_pid(:)           ! density-desc particle ids (all)
+   integer(kind=4), allocatable :: opt_boff(:)          ! per-group block offset
+   real(kind=8),    allocatable :: opt_btm(:)           ! block-boundary Sum m
+   real(kind=8),    allocatable :: opt_bs1(:,:)         ! block-boundary Sum m*x_abs(3)
+   real(kind=8),    allocatable :: opt_bs2(:)           ! block-boundary Sum m*|x_abs|^2
+   real(kind=8),    allocatable :: opt_bsd(:)           ! block-boundary Sum dens
+   real(kind=8),    allocatable :: opt_anchor(:,:)      ! per-group unwrap anchor (3)
    real(kind=8)    :: sizeroot
    real(kind=8)    :: xlong, ylong, zlong, boxsize, boxsize2, xyzlong
    real(kind=8)    :: xlongs2, ylongs2, zlongs2
@@ -170,6 +185,7 @@ module fhalo_defs
    logical             :: cdm          ! flag to select particle closest to the cdm instead of the one with the highest density
    logical             :: DPMMC=.false.! flag to select the densest particle in the most massive cell of the halo (not with FOF)
    logical             :: SC=.false.   ! flag to select the com within concentric spheres (not with FOF)
+   logical             :: optimize_nodes=.false. ! TASK-28: opt-in incremental create_nodes path (default off = classic path)
    real(kind=8)        :: dcell_min
    real(kind=8)        :: eps_SC
    logical             :: dump_dms=.false.
@@ -285,6 +301,93 @@ subroutine indexx(n,arr,indx)
    goto 1
 
 end subroutine indexx
+
+!=====================================================================
+subroutine opt_indexx(n,arr,indx)
+   implicit none
+
+   integer(kind=4)           :: n,indx(n)
+   real(kind=8)              :: arr(n)
+   integer(kind=4),parameter :: m=7,nstack=128
+   integer(kind=4)           :: i,indxt,ir,itemp,j,jstack,k,l,istack(nstack)
+   real(kind=8)              :: a
+
+   do j = 1,n
+      indx(j) = j
+   enddo
+
+   jstack = 0
+   l      = 1
+   ir     = n
+   1 if (ir-l .lt. m) then
+      do j = l+1,ir
+         indxt = indx(j)
+         a     = arr(indxt)
+         do i = j-1,1,-1
+            if (arr(indx(i)) .le. a) goto 2
+            indx(i+1) = indx(i)
+         enddo
+         i         = 0
+   2       indx(i+1) = indxt
+      enddo
+      if (jstack .eq. 0) return
+      ir     = istack(jstack)
+      l      = istack(jstack-1)
+      jstack = jstack-2
+   else
+      k         = (l+ir)/2
+      itemp     = indx(k)
+      indx(k)   = indx(l+1)
+      indx(l+1) = itemp
+      if (arr(indx(l+1)) .gt. arr(indx(ir))) then
+         itemp     = indx(l+1)
+         indx(l+1) = indx(ir)
+         indx(ir)  = itemp
+      endif
+      if (arr(indx(l)) .gt. arr(indx(ir))) then
+         itemp    = indx(l)
+         indx(l)  = indx(ir)
+         indx(ir) = itemp
+      endif
+      if (arr(indx(l+1)) .gt. arr(indx(l))) then
+         itemp     = indx(l+1)
+         indx(l+1) = indx(l)
+         indx(l)   = itemp
+      endif
+      i     = l+1
+      j     = ir
+      indxt = indx(l)
+      a     = arr(indxt)
+   3    continue
+      i     = i+1
+      if (arr(indx(i)) .lt. a) goto 3
+   4    continue
+      j     = j-1
+      if (arr(indx(j)) .gt. a) goto 4
+      if (j .lt. i) goto 5
+      itemp   = indx(i)
+      indx(i) = indx(j)
+      indx(j) = itemp
+      goto 3
+   5    continue
+      indx(l) = indx(j)
+      indx(j) = indxt
+      jstack  = jstack+2
+      if (jstack .gt. nstack) stop 'nstack too small in opt_indexx'
+      if (ir-i+1 .ge. j-l) then
+         istack(jstack)   = ir
+         istack(jstack-1) = i
+         ir               = j-1
+      else
+         istack(jstack)   = j-1
+         istack(jstack-1) = l
+         l                = i
+      endif
+   endif
+   goto 1
+
+end subroutine opt_indexx
+
 
 
 subroutine print_memory()
@@ -542,7 +645,7 @@ subroutine sync_others( &
    rho_threshold_in, massp_in, boxsize_in, &
    nhop_in, nvoisins_in, &
    fudge_in, alphap_in, &
-   method_in, nlevelmax_in)
+   method_in, nlevelmax_in, optimize_nodes_in)
 
    implicit none
 
@@ -553,6 +656,7 @@ subroutine sync_others( &
    real(kind=8), intent(in) :: fudge_in, alphap_in
    character(len=*), intent(in) :: method_in
    integer(kind=4), intent(in) :: nlevelmax_in
+   logical, intent(in) :: optimize_nodes_in
 
    verbose         = verbose_in
    megaverbose     = megaverbose_in
@@ -569,6 +673,7 @@ subroutine sync_others( &
    
    method          = method_in(1:min(len(method), len(method_in)))
    nlevelmax       = nlevelmax_in
+   optimize_nodes  = optimize_nodes_in
 
 end subroutine sync_others
 
@@ -846,7 +951,11 @@ subroutine create_group_tree
    memory_used = memory_used + real(size(queue_color), kind=8)*4/1.d9
    if (verbose) write(errunit,*) '    [OMP] Create nodes ...'
    call system_clock(count=ttt0, count_rate=tttrate)
-   call dev_create_nodes_omp_root(rhot,inode,igr1,igr2)
+   if (optimize_nodes) then
+      call opt_create_nodes_omp_root(rhot,inode,igr1,igr2)
+   else
+      call dev_create_nodes_omp_root(rhot,inode,igr1,igr2)
+   endif
    call system_clock(count=ttt1, count_rate=tttrate)
    dtdtdt=real(ttt1-ttt0,8)/real(tttrate,8)
    if (verbose) write(errunit,'(A,F10.2,A)') "     --> ",dtdtdt," seconds to create nodes"
@@ -1037,6 +1146,26 @@ subroutine dev_create_nodes_omp_root(rhot,inode,igr1,igr2)
 end subroutine dev_create_nodes_omp_root
 
 !=======================================================================
+subroutine opt_create_nodes_omp_root(rhot,inode,igr1,igr2)
+!=======================================================================
+!  TASK-28 (PL) opt-in create_nodes entry.
+!  Phase-1 scaffold: passthrough to the classic task routine so the branch
+!  wiring can be validated as byte-identical BEFORE the incremental-moment
+!  optimization is introduced. Will be swapped to omp_opt_create_nodes_task.
+   implicit none
+   real(kind=8)    :: rhot
+   integer(kind=4) :: inode, igr1, igr2
+   call build_opt_prefix_moments
+   !$OMP PARALLEL NUM_THREADS(nbPes)
+   !$OMP SINGLE
+   call omp_opt_create_nodes_task(rhot,inode,igr1,igr2,.false.,rhot)
+   !$OMP END SINGLE
+   !$OMP END PARALLEL
+   deallocate(opt_off,opt_pid,opt_boff,opt_btm,opt_bs1,opt_bs2,opt_bsd,opt_anchor)
+
+end subroutine opt_create_nodes_omp_root
+
+!=======================================================================
 subroutine reserve_nodes_block(nnew,inode_first)
 !=======================================================================
    implicit none
@@ -1148,6 +1277,7 @@ recursive subroutine omp_dev_create_nodes_task(rhot0,inode0,igr1_0,igr2_0,do_pai
    integer(kind=4), allocatable :: queue_local(:)
 
    logical                      :: ifok_this
+   logical                      :: use_exact_fallback
    integer(kind=4), parameter   :: task_group_min = 32
 
    integer(kind=4) :: t_inodeout, t_igr1out, t_igr2out
@@ -1497,6 +1627,691 @@ recursive subroutine omp_dev_create_nodes_task(rhot0,inode0,igr1_0,igr2_0,do_pai
 
 end subroutine omp_dev_create_nodes_task
 
+
+!=======================================================================
+!  TASK-28 (PL) moment-optimized create_nodes helpers.
+!  Precompute per-group density-desc sorted particles + cumulative moments
+!  (mass, mass*x_abs, mass*|x_abs|^2, density) so that the per-level
+!  treat_particles re-scan (~52x) collapses to O(log n) prefix lookups.
+!  Positions stored absolute-unwrapped relative to each group's densest
+!  particle (anchor); posref-invariant quantities => field-policy identical.
+!=======================================================================
+subroutine build_opt_prefix_moments
+   implicit none
+   integer(kind=4) :: igroup, ipar, n, j, k, base, ntot, bbase, nblktot, m
+   integer(kind=4), allocatable :: tmp_pid(:), idx(:)
+   real(kind=8),    allocatable :: tmp_dens(:)
+   real(kind=8) :: ax,ay,az, dx,dy,dz, xm, xu,yu,zu
+   real(kind=8) :: cm, cs1, cs2, cs3, cq, cd
+
+   allocate(opt_off(0:ngroups))
+   allocate(opt_boff(0:ngroups))
+   opt_off(0)=0
+   opt_boff(0)=0
+   do igroup=1,ngroups
+      n=0
+      ipar=firstpart(igroup)
+      do while (ipar.gt.0)
+         n=n+1
+         ipar=idpart_adapt(ipar)
+      enddo
+      opt_off(igroup)=opt_off(igroup-1)+n
+      opt_boff(igroup)=opt_boff(igroup-1)+(n/opt_bk)   ! # of full blocks
+   enddo
+   ntot=opt_off(ngroups)
+   nblktot=opt_boff(ngroups)
+   allocate(opt_pid(ntot))
+   allocate(opt_anchor(3,ngroups))
+   ! nblktot may be 0 (all groups < opt_bk); allocate at least size 1 to keep
+   ! the array associated for downstream indexing safety.
+   allocate(opt_btm(max(nblktot,1)))
+   allocate(opt_bs1(3,max(nblktot,1)))
+   allocate(opt_bs2(max(nblktot,1)))
+   allocate(opt_bsd(max(nblktot,1)))
+
+   !$OMP PARALLEL DO NUM_THREADS(nbPes) SCHEDULE(dynamic) &
+   !$OMP& PRIVATE(igroup,ipar,n,j,k,base,bbase,m,tmp_pid,idx,tmp_dens, &
+   !$OMP&         ax,ay,az,dx,dy,dz,xm,xu,yu,zu,cm,cs1,cs2,cs3,cq,cd)
+   do igroup=1,ngroups
+      base=opt_off(igroup-1)
+      bbase=opt_boff(igroup-1)
+      n=opt_off(igroup)-base
+      if (n.le.0) cycle
+      allocate(tmp_pid(n), idx(n), tmp_dens(n))
+      ipar=firstpart(igroup); j=0
+      do while (ipar.gt.0)
+         j=j+1
+         tmp_pid(j)=ipar
+         tmp_dens(j)=density(ipar)
+         ipar=idpart_adapt(ipar)
+      enddo
+      call opt_indexx(n, tmp_dens, idx)     ! ascending order of density
+      ! anchor = densest particle = idx(n)
+      ax=pos(1,tmp_pid(idx(n)))
+      ay=pos(2,tmp_pid(idx(n)))
+      az=pos(3,tmp_pid(idx(n)))
+      opt_anchor(1,igroup)=ax
+      opt_anchor(2,igroup)=ay
+      opt_anchor(3,igroup)=az
+      ! running cumulative; snapshot into block arrays every opt_bk particles.
+      ! Summation order (k=1..n descending density) is identical to the full
+      ! prefix, so block boundary + residual direct-sum reproduces it bit-for-bit.
+      cm=0.d0; cs1=0.d0; cs2=0.d0; cs3=0.d0; cq=0.d0; cd=0.d0
+      do k=1,n
+         ipar=tmp_pid(idx(n-k+1))        ! k-th densest (descending)
+         xm=mass(ipar)
+         dx=pos(1,ipar)-ax
+         if (dx.ge.xlongs2) then
+            dx=dx-xlong
+         elseif (dx.lt.-xlongs2) then
+            dx=dx+xlong
+         endif
+         dy=pos(2,ipar)-ay
+         if (dy.ge.ylongs2) then
+            dy=dy-ylong
+         elseif (dy.lt.-ylongs2) then
+            dy=dy+ylong
+         endif
+         dz=pos(3,ipar)-az
+         if (dz.ge.zlongs2) then
+            dz=dz-zlong
+         elseif (dz.lt.-zlongs2) then
+            dz=dz+zlong
+         endif
+         xu=ax+dx
+         yu=ay+dy
+         zu=az+dz
+         opt_pid(base+k)=ipar
+         cm =cm +xm
+         cs1=cs1+xm*xu
+         cs2=cs2+xm*yu
+         cs3=cs3+xm*zu
+         cq =cq +xm*(xu*xu+yu*yu+zu*zu)
+         cd =cd +density(ipar)
+         if (mod(k,opt_bk).eq.0) then       ! block boundary at position k=m*opt_bk
+            m=bbase+(k/opt_bk)
+            opt_btm(m)=cm
+            opt_bs1(1,m)=cs1
+            opt_bs1(2,m)=cs2
+            opt_bs1(3,m)=cs3
+            opt_bs2(m)=cq
+            opt_bsd(m)=cd
+         endif
+      enddo
+      deallocate(tmp_pid, idx, tmp_dens)
+   enddo
+   !$OMP END PARALLEL DO
+
+end subroutine build_opt_prefix_moments
+
+!=======================================================================
+integer(kind=4) function opt_count(igroup,rhot)
+!=======================================================================
+!  #particles of group with density > rhot (density-desc slice => prefix).
+   implicit none
+   integer(kind=4), intent(in) :: igroup
+   real(kind=8),    intent(in) :: rhot
+   integer(kind=4) :: base,n,lo,hi,mid
+   base=opt_off(igroup-1)
+   n=opt_off(igroup)-base
+   lo=0; hi=n
+   do while (lo.lt.hi)
+      mid=(lo+hi+1)/2
+      if (density(opt_pid(base+mid)).gt.rhot) then
+         lo=mid
+      else
+         hi=mid-1
+      endif
+   enddo
+   opt_count=lo
+end function opt_count
+
+!=======================================================================
+subroutine treat_particles_opt(igroup,rhot,cnt,tmass,s1,s2,sd)
+!=======================================================================
+!  Moment lookup replacing treat_particles' per-level re-scan.
+!  cnt=count, tmass=Sum m, s1=Sum m*x_abs(3), s2=Sum m*|x_abs|^2, sd=Sum dens.
+!  TASK-28b BLOCKED prefix: value = nearest lower block-boundary cumulative
+!  (position b*opt_bk) + residual direct-sum over positions b*opt_bk+1..t.
+!  The residual re-derives x_abs from the stored per-group anchor with the same
+!  minimum-image unwrap and accumulates in the same order as build, so the
+!  result is bit-identical to the full (dense) prefix.
+   implicit none
+   integer(kind=4), intent(in)  :: igroup
+   real(kind=8),    intent(in)  :: rhot
+   integer(kind=4), intent(out) :: cnt
+   real(kind=8),    intent(out) :: tmass,s1(3),s2,sd
+   integer(kind=4) :: base,bbase,t,b,p,ipar,p0
+   real(kind=8) :: ax,ay,az, dx,dy,dz, xm, xu,yu,zu
+   base=opt_off(igroup-1)
+   bbase=opt_boff(igroup-1)
+   t=opt_count(igroup,rhot)
+   cnt=t
+   if (t.le.0) then
+      tmass=0.d0; s1(1:3)=0.d0; s2=0.d0; sd=0.d0
+      return
+   endif
+   b=t/opt_bk                       ! # of full blocks below t
+   if (b.ge.1) then                 ! start from block boundary (position b*opt_bk)
+      tmass=opt_btm(bbase+b)
+      s1(1)=opt_bs1(1,bbase+b)
+      s1(2)=opt_bs1(2,bbase+b)
+      s1(3)=opt_bs1(3,bbase+b)
+      s2=opt_bs2(bbase+b)
+      sd=opt_bsd(bbase+b)
+      p0=b*opt_bk
+   else
+      tmass=0.d0; s1(1:3)=0.d0; s2=0.d0; sd=0.d0
+      p0=0
+   endif
+   if (p0.eq.t) return              ! t is exactly on a block boundary
+   ax=opt_anchor(1,igroup)
+   ay=opt_anchor(2,igroup)
+   az=opt_anchor(3,igroup)
+   do p=p0+1,t                      ! residual: at most opt_bk-1 particles
+      ipar=opt_pid(base+p)
+      xm=mass(ipar)
+      dx=pos(1,ipar)-ax
+      if (dx.ge.xlongs2) then
+         dx=dx-xlong
+      elseif (dx.lt.-xlongs2) then
+         dx=dx+xlong
+      endif
+      dy=pos(2,ipar)-ay
+      if (dy.ge.ylongs2) then
+         dy=dy-ylong
+      elseif (dy.lt.-ylongs2) then
+         dy=dy+ylong
+      endif
+      dz=pos(3,ipar)-az
+      if (dz.ge.zlongs2) then
+         dz=dz-zlong
+      elseif (dz.lt.-zlongs2) then
+         dz=dz+zlong
+      endif
+      xu=ax+dx
+      yu=ay+dy
+      zu=az+dz
+      tmass=tmass+xm
+      s1(1)=s1(1)+xm*xu
+      s1(2)=s1(2)+xm*yu
+      s1(3)=s1(3)+xm*zu
+      s2=s2+xm*(xu*xu+yu*yu+zu*zu)
+      sd=sd+density(ipar)
+   enddo
+end subroutine treat_particles_opt
+
+
+recursive subroutine omp_opt_create_nodes_task(rhot0,inode0,igr1_0,igr2_0,do_paint,rhot_paint0)
+!=======================================================================
+   implicit none
+
+   real(kind=8),    intent(in) :: rhot0
+   integer(kind=4), intent(in) :: inode0, igr1_0, igr2_0
+   logical,         intent(in) :: do_paint
+
+   integer(kind=4)              :: inode
+   real(kind=8)                 :: rhot
+   integer(kind=4)              :: icolor,igr_eff,ncolors
+   integer(kind=4)              :: igroup, igr,igr1,igr2
+   integer(kind=4)              :: inc_color_tot,inode1,mass_loc,masstmp,igroupref
+   integer(kind=4)              :: inodeout,igr1out,igr2out,isisters,nsisters
+   integer(kind=4)              :: mass_comp,icolor_ref
+   real(kind=8)                 :: posg(3),posgtmp(3),posref(3),rhotout,rsquaretmp,rsquareg
+   real(kind=8)                 :: densmoyg,densmoytmp
+   real(kind=8)                 :: densmoy_comp_max,truemass,truemasstmp
+   real(kind=8)                 :: posfin(3)
+   real(kind=8)                 :: densmaxgroup
+
+   integer(kind=4), allocatable :: igrpos(:),igrinc(:)
+   integer(kind=4), allocatable :: igrposnew(:)
+   integer(kind=4), allocatable :: massg(:)
+   real(kind=8),    allocatable :: truemassg(:)
+   real(kind=8),    allocatable :: densmaxg(:)
+   integer(kind=4), allocatable :: mass_compg(:)
+   real(kind=8),    allocatable :: posgg(:,:)
+   real(kind=8),    allocatable :: rsquare(:)
+   real(kind=8),    allocatable :: densmoy(:)
+   logical,         allocatable :: ifok_tmp(:)
+   integer(kind=4), allocatable :: ok_color(:)
+   integer(kind=4), allocatable :: queue_local(:)
+
+   logical                      :: ifok_this
+   logical                      :: use_exact_fallback
+   integer(kind=4), parameter   :: task_group_min = 32
+
+   integer(kind=4) :: t_inodeout, t_igr1out, t_igr2out
+   real(kind=8)    :: t_rhotout
+   logical         :: make_task
+
+   integer(kind=4) :: ipar
+   integer(kind=4) :: opt_t, opt_base, opt_k
+   real(kind=8)    :: t_rhotpaint
+   real(kind=8), intent(in) :: rhot_paint0
+
+!  Initialize current job
+   rhot  = rhot0
+   inode = inode0
+   igr1  = igr1_0
+   igr2  = igr2_0
+
+!  Paint current node if this is a child task.
+!  This replaces parent-side paint_particles2.
+   if (do_paint) then
+      do igr=igr1,igr2
+         igroup=idgroup(igr)
+         opt_t=opt_count(igroup,rhot_paint0)
+         opt_base=opt_off(igroup-1)
+         do opt_k=1,opt_t
+            liste_parts(opt_pid(opt_base+opt_k))=inode
+         enddo
+      enddo
+   endif
+!  nsisters == 1 chain is handled inside this loop without recursive call.
+   do
+
+      allocate(queue_local(max(igr2-igr1+1,1)))
+
+!     ------------------------------------------------------------
+!     Percolate the groups
+!     ------------------------------------------------------------
+      color(igr1:igr2)=0
+
+      ncolors=0
+      do igr=igr1,igr2
+         igroup=idgroup(igr)
+         if (color(igr).eq.0) then
+            ncolors=ncolors+1
+            call dev_do_colorize_local(igroup,igr,rhot,queue_local,ncolors)
+         endif
+      enddo
+
+      deallocate(queue_local)
+
+!     ------------------------------------------------------------
+!     Select groups above rhot and compact by color
+!     ------------------------------------------------------------
+      allocate(igrpos(0:ncolors))
+      allocate(igrinc(1:ncolors))
+
+      igrpos(0)=igr1-1
+      igrpos(1:ncolors)=0
+
+      do igr=igr1,igr2
+         icolor=color(igr)
+         igroup=idgroup(igr)
+         if (densityg(igroup).gt.rhot) &
+&           igrpos(icolor)=igrpos(icolor)+1
+      enddo
+
+      do icolor=1,ncolors
+         igrpos(icolor)=igrpos(icolor-1)+igrpos(icolor)
+      enddo
+
+      if (igrpos(ncolors)-igr1+1.eq.0) then
+         write(errunit,*) 'ERROR in omp_opt_create_nodes_task :'
+         write(errunit,*) 'All subgroups are below the threshold.'
+      endif
+
+      igrinc(1:ncolors)=0
+
+      do igr=igr1,igr2
+         icolor=color(igr)
+         igroup=idgroup(igr)
+         if (densityg(igroup).gt.rhot) then
+            igrinc(icolor)=igrinc(icolor)+1
+            igr_eff=igrinc(icolor)+igrpos(icolor-1)
+            idgroup_tmp(igr_eff)=igroup
+            igroupid(igroup)=igr_eff
+         endif
+      enddo
+
+      igr2=igrpos(ncolors)
+      idgroup(igr1:igr2)=idgroup_tmp(igr1:igr2)
+
+      inc_color_tot=0
+      do icolor=1,ncolors
+         if (igrinc(icolor).gt.0) inc_color_tot=inc_color_tot+1
+      enddo
+
+      allocate(igrposnew(0:inc_color_tot))
+      igrposnew(0)=igrpos(0)
+
+      inc_color_tot=0
+      do icolor=1,ncolors
+         if (igrinc(icolor).gt.0) then
+            inc_color_tot=inc_color_tot+1
+            igrposnew(inc_color_tot)=igrpos(icolor)
+         endif
+      enddo
+
+      deallocate(igrpos)
+      deallocate(igrinc)
+
+!     ------------------------------------------------------------
+!     Compute properties of each color component
+!     ------------------------------------------------------------
+      isisters=0
+
+      allocate(posgg(1:3,1:inc_color_tot))
+      allocate(massg(1:inc_color_tot))
+      allocate(truemassg(1:inc_color_tot))
+      allocate(densmaxg(1:inc_color_tot))
+      allocate(mass_compg(1:inc_color_tot))
+      allocate(rsquare(1:inc_color_tot))
+      allocate(densmoy(1:inc_color_tot))
+      allocate(ok_color(1:inc_color_tot))
+      allocate(ifok_tmp(1:inc_color_tot))
+
+      ifok_tmp(1:inc_color_tot)=.false.
+
+!     Keep this loop serial inside each task.
+!     Task-level parallelism is handled by child subtrees.
+      do icolor=1,inc_color_tot
+         posg(1:3)=0.d0
+         mass_loc=0
+         truemass=0.d0
+         rsquareg=0.d0
+         densmoyg=0.d0
+
+         igr1out=igrposnew(icolor-1)+1
+         igr2out=igrposnew(icolor)
+
+         densmaxgroup=-1.d0
+         mass_comp=0
+         densmoy_comp_max=-1.d0
+         igroupref=0
+
+         do igr=igr1out,igr2out
+            igroup=idgroup(igr)
+            densmaxgroup=max(densmaxgroup,densityg(igroup))
+            call treat_particles_opt(igroup,rhot,masstmp,truemasstmp, &
+&                                     posgtmp,rsquaretmp,densmoytmp)
+
+            posg(1)=posg(1)+posgtmp(1)
+            posg(2)=posg(2)+posgtmp(2)
+            posg(3)=posg(3)+posgtmp(3)
+
+            rsquareg=rsquareg+rsquaretmp
+            mass_loc=mass_loc+masstmp
+            truemass=truemass+truemasstmp
+            densmoyg=densmoyg+densmoytmp
+            mass_comp=max(mass_comp,masstmp)
+
+            if (masstmp > 0) then
+               densmoytmp=densmoytmp/dble(masstmp)
+               densmoy_comp_max=max(densmoy_comp_max, &
+&                 densmoytmp/(1.d0+fudge/sqrt(dble(masstmp))))
+            endif
+         enddo
+
+         massg(icolor)=mass_loc
+         truemassg(icolor)=truemass
+         posgg(1:3,icolor)=posg(1:3)
+         densmaxg(icolor)=densmaxgroup
+         mass_compg(icolor)=mass_comp
+
+         rsquare(icolor)=sqrt(abs( &
+&           (truemass*rsquareg- &
+&           (posg(1)**2+posg(2)**2+posg(3)**2) )/ &
+&            truemass**2 ))
+
+         densmoy(icolor)=densmoyg/dble(mass_loc)
+
+         use_exact_fallback=optimized_needs_exact_fallback(mass_loc, &
+&           densmoy(icolor),densmaxgroup,densmoy_comp_max,rsquare(icolor),rhot)
+
+         if (use_exact_fallback) then
+            posg(1:3)=0.d0
+            mass_loc=0
+            truemass=0.d0
+            rsquareg=0.d0
+            densmoyg=0.d0
+            densmaxgroup=-1.d0
+            mass_comp=0
+            densmoy_comp_max=-1.d0
+            igroupref=0
+
+            do igr=igr1out,igr2out
+               igroup=idgroup(igr)
+               densmaxgroup=max(densmaxgroup,densityg(igroup))
+               call treat_particles(igroup,rhot,posgtmp,masstmp, &
+&                                   igroupref,posref,rsquaretmp, &
+&                                   densmoytmp,truemasstmp)
+               posg(1)=posg(1)+posgtmp(1)
+               posg(2)=posg(2)+posgtmp(2)
+               posg(3)=posg(3)+posgtmp(3)
+               rsquareg=rsquareg+rsquaretmp
+               mass_loc=mass_loc+masstmp
+               truemass=truemass+truemasstmp
+               densmoyg=densmoyg+densmoytmp
+               mass_comp=max(mass_comp,masstmp)
+               if (masstmp > 0) then
+                  densmoytmp=densmoytmp/dble(masstmp)
+                  densmoy_comp_max=max(densmoy_comp_max, &
+&                    densmoytmp/(1.d0+fudge/sqrt(dble(masstmp))))
+               endif
+            enddo
+
+            massg(icolor)=mass_loc
+            truemassg(icolor)=truemass
+            posgg(1:3,icolor)=posg(1:3)
+            densmaxg(icolor)=densmaxgroup
+            mass_compg(icolor)=mass_comp
+            rsquare(icolor)=sqrt(abs( &
+&              (truemass*rsquareg- &
+&              (posg(1)**2+posg(2)**2+posg(3)**2) )/ &
+&               truemass**2 ))
+            densmoy(icolor)=densmoyg/dble(mass_loc)
+         endif
+
+         ifok_this=mass_loc.ge.nmembthresh.and. &
+&           (densmoy(icolor).gt.rhot*(1.d0+fudge/sqrt(dble(mass_loc))).or. &
+&            densmoy_comp_max.gt.rhot).and. &
+&           densmaxg(icolor).ge.alphap*densmoy(icolor).and. &
+&           rsquare(icolor).ge.epsilon
+
+         ifok_tmp(icolor)=ifok_this
+      enddo
+
+      isisters=0
+      icolor_ref=0
+
+      do icolor=1,inc_color_tot
+         if (ifok_tmp(icolor)) then
+            isisters=isisters+1
+            ok_color(isisters)=icolor
+            icolor_ref=icolor
+         endif
+      enddo
+
+      nsisters=isisters
+
+!     ------------------------------------------------------------
+!     Case 1: branching node, create child nodes and spawn tasks
+!     ------------------------------------------------------------
+      if (nsisters.gt.1) then
+
+         call reserve_nodes_block(nsisters,inode1)
+
+!        Create child node metadata in deterministic sibling order
+         do isisters=1,nsisters
+            icolor=ok_color(isisters)
+            inodeout=inode1+isisters-1
+
+            node(inodeout)%mother=inode
+            node(inodeout)%densmax=densmaxg(icolor)
+
+            if (isisters.gt.1) then
+               node(inodeout)%sister=inodeout-1
+            else
+               node(inodeout)%sister=0
+            endif
+
+            node(inodeout)%nsisters=nsisters
+            node(inodeout)%mass=massg(icolor)
+            node(inodeout)%truemass=truemassg(icolor)
+
+            if (massg(icolor).eq.0) then
+               write(errunit,*) 'ERROR in omp_opt_create_nodes_task :'
+               write(errunit,*) 'NULL mass for inode=',inodeout
+               STOP
+            endif
+
+            posfin(1:3)=real(posgg(1:3,icolor)/truemassg(icolor),8)
+            node(inodeout)%radius=real(rsquare(icolor),8)
+            node(inodeout)%density=real(densmoy(icolor),8)
+
+            if (posfin(1).ge.xlongs2) then
+               posfin(1)=posfin(1)-xlong
+            elseif (posfin(1).lt.-xlongs2) then
+               posfin(1)=posfin(1)+xlong
+            endif
+
+            if (posfin(2).ge.ylongs2) then
+               posfin(2)=posfin(2)-ylong
+            elseif (posfin(2).lt.-ylongs2) then
+               posfin(2)=posfin(2)+ylong
+            endif
+
+            if (posfin(3).ge.zlongs2) then
+               posfin(3)=posfin(3)-zlong
+            elseif (posfin(3).lt.-zlongs2) then
+               posfin(3)=posfin(3)+zlong
+            endif
+
+            node(inodeout)%position(1:3)=posfin(1:3)
+            node(inodeout)%rho_saddle=rhot
+            node(inodeout)%level=node(inode)%level+1
+         enddo
+
+!        Original structure uses last child as firstchild head
+         node(inode)%firstchild=inode1+nsisters-1
+
+!        Spawn child subtree tasks
+         do isisters=1,nsisters
+            icolor=ok_color(isisters)
+
+            t_inodeout=inode1+isisters-1
+            t_igr1out=igrposnew(icolor-1)+1
+            t_igr2out=igrposnew(icolor)
+            t_rhotout=rhot*(1.d0+fudge/sqrt(dble(mass_compg(icolor))))
+
+            make_task = (t_igr2out-t_igr1out+1 .ge. task_group_min)
+
+            t_rhotpaint=rhot
+            !$OMP TASK FIRSTPRIVATE(t_rhotout,t_inodeout,t_igr1out,t_igr2out,t_rhotpaint) IF(make_task)
+            call omp_opt_create_nodes_task(t_rhotout,t_inodeout,t_igr1out,t_igr2out,.true.,t_rhotpaint)
+            !$OMP END TASK
+         enddo
+
+         !$OMP TASKWAIT
+
+         deallocate(igrposnew)
+         deallocate(posgg)
+         deallocate(massg)
+         deallocate(truemassg)
+         deallocate(densmaxg)
+         deallocate(densmoy)
+         deallocate(mass_compg)
+         deallocate(rsquare)
+         deallocate(ok_color)
+         deallocate(ifok_tmp)
+
+         exit
+
+!     ------------------------------------------------------------
+!     Case 2: only one surviving component.
+!     Continue in the same task and same inode.
+!     ------------------------------------------------------------
+      elseif (nsisters.eq.1) then
+
+         icolor=icolor_ref
+         rhotout=rhot*(1.d0+fudge/sqrt(dble(mass_compg(icolor))))
+         igr1out=igrposnew(0)+1
+         igr2out=igrposnew(inc_color_tot)
+
+         deallocate(igrposnew)
+         deallocate(posgg)
+         deallocate(massg)
+         deallocate(truemassg)
+         deallocate(densmaxg)
+         deallocate(densmoy)
+         deallocate(mass_compg)
+         deallocate(rsquare)
+         deallocate(ok_color)
+         deallocate(ifok_tmp)
+
+         if (igr2out.ne.igr1out) then
+            rhot=rhotout
+            igr1=igr1out
+            igr2=igr2out
+            cycle
+         else
+            node(inode)%firstchild=0
+            exit
+         endif
+
+!     ------------------------------------------------------------
+!     Case 3: no surviving component
+!     ------------------------------------------------------------
+      else
+
+         node(inode)%firstchild=0
+
+         deallocate(igrposnew)
+         deallocate(posgg)
+         deallocate(massg)
+         deallocate(truemassg)
+         deallocate(densmaxg)
+         deallocate(densmoy)
+         deallocate(mass_compg)
+         deallocate(rsquare)
+         deallocate(ok_color)
+         deallocate(ifok_tmp)
+
+         exit
+      endif
+
+   enddo
+
+end subroutine omp_opt_create_nodes_task
+
+
+
+!=======================================================================
+logical function optimized_needs_exact_fallback(mass_loc,densmoy,densmaxgroup, &
+&                                               densmoy_comp_max,rsquare,rhot)
+!=======================================================================
+!  TASK-28c merge: small/threshold-near components use exact legacy recompute
+!  (Codex TASK-28b criterion) instead of blocked-prefix -> removes small flips.
+   implicit none
+   integer(kind=4), intent(in) :: mass_loc
+   real(kind=8),    intent(in) :: densmoy, densmaxgroup, densmoy_comp_max
+   real(kind=8),    intent(in) :: rsquare, rhot
+   real(kind=8), parameter     :: rel_margin = 1.d-8
+   integer(kind=4), parameter  :: small_component_limit = 1000
+   real(kind=8)                :: density_cut, alpha_cut
+   real(kind=8)                :: margin_density, margin_comp, margin_alpha, margin_radius
+
+   optimized_needs_exact_fallback=.false.
+   if (mass_loc.le.0) return
+   if (mass_loc.lt.small_component_limit) then
+      optimized_needs_exact_fallback=.true.
+      return
+   endif
+   density_cut=rhot*(1.d0+fudge/sqrt(dble(mass_loc)))
+   alpha_cut=alphap*densmoy
+   margin_density=abs(densmoy-density_cut)/max(abs(density_cut),1.d-300)
+   margin_comp=abs(densmoy_comp_max-rhot)/max(abs(rhot),1.d-300)
+   margin_alpha=abs(densmaxgroup-alpha_cut)/max(abs(alpha_cut),1.d-300)
+   margin_radius=abs(rsquare-epsilon)/max(abs(epsilon),1.d-300)
+   optimized_needs_exact_fallback = &
+&     margin_density.lt.rel_margin .or. &
+&     margin_comp.lt.rel_margin .or. &
+&     margin_alpha.lt.rel_margin .or. &
+&     margin_radius.lt.rel_margin
+end function optimized_needs_exact_fallback
 
 !=======================================================================
 subroutine treat_particles(igroup,rhot,posg,imass,igroupref,posref, &

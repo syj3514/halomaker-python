@@ -46,7 +46,7 @@ python module compute_adaptahop
                 real(kind=8), dimension(3), intent(in) :: pos_shift_in
             end subroutine sync_from_init_adaptahop
 
-            subroutine sync_others(verbose_in,megaverbose_in,npart_in,nbpes_in,rho_threshold_in,massp_in,boxsize_in,nhop_in,nvoisins_in,fudge_in,alphap_in,method_in,nlevelmax_in)
+            subroutine sync_others(verbose_in,megaverbose_in,npart_in,nbpes_in,rho_threshold_in,massp_in,boxsize_in,nhop_in,nvoisins_in,fudge_in,alphap_in,method_in,nlevelmax_in,optimize_nodes_in)
                 logical, intent(in) :: verbose_in
                 logical, intent(in) :: megaverbose_in
                 integer(kind=4), intent(in) :: npart_in
@@ -60,6 +60,7 @@ python module compute_adaptahop
                 real(kind=8), intent(in) :: alphap_in
                 character*(*), intent(in) :: method_in
                 integer(kind=4), intent(in) :: nlevelmax_in
+                logical, intent(in) :: optimize_nodes_in
             end subroutine sync_others
 
             subroutine close

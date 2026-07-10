@@ -743,6 +743,7 @@ def sync_fortran():
         H.nhop, H.nvoisins,
         H.fudge, H.alphap,
         H.method, H.nlevelmax,
+        H.optimize_nodes,
     )
 
 def get_bytes_data(array):
