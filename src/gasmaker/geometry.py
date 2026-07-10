@@ -8,9 +8,16 @@ def halo_center_code(halo, box_mpc, units_version="legacy"):
     return np.mod(center_mpc / box_mpc, 1.0)
 
 
-def halo_radius_code(halo, box_mpc, radius_field="r", padding=1.0, units_version="legacy"):
+def halo_radius_code(halo, box_mpc, radius_field="r", padding=1.0, units_version="legacy",
+                     allow_nonfinite=False):
     radius = float(halo[radius_field])
     if not np.isfinite(radius) or radius <= 0:
+        # Non-virialized/degenerate halos carry rvir=NaN in the catalog
+        # (HaloMaker det_vir_props_1b4 fix, dc71d71). For virial-radius apertures
+        # propagate the NaN so downstream masks skip the aperture and the gas
+        # fields stay NaN, instead of aborting the whole run.
+        if allow_nonfinite:
+            return float("nan")
         raise ValueError(
             f"Invalid {radius_field}={radius} for halo id={halo['id']}"
         )

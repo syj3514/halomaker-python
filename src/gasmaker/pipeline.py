@@ -486,6 +486,7 @@ class GasMaker:
         radius_rvir = halo_radius_code(
             halo, self.catalog.box_physical_mpc, "rvir",
             units_version=self.catalog.units_version,
+            allow_nonfinite=True,
         )
         aperture_radii = {
             "_rvir": radius_rvir,
@@ -558,6 +559,7 @@ class GasMaker:
         radius_rvir = halo_radius_code(
             halo, box_physical_mpc, "rvir",
             units_version=self.catalog.units_version,
+            allow_nonfinite=True,
         )
         selected_rvir = self._candidate_cells(
             cells, cell_index, center_halo, radius_rvir, self.include_boundary
