@@ -139,7 +139,13 @@ halo 속성)와 Fortran OpenMP 단계(이웃 탐색·mean density·saddle 연결
 `nbPes`에 비례하지 않으며, 대형 박스에서는 이 단계가 wall time을 지배합니다. 이는 튜닝 문제가 아니라
 **알고리즘적 한계**입니다 — 노드 트리는 가장 무거운 구조의 순차적 밀도-percolation(데이터 의존성 사슬)으로
 만들어지고, 07206 박스에서는 **단일 최대 헤일로 하나가 이 단계의 ~69%**라 출력을 보존하는 병렬 speedup
-상한이 ≈1.45×입니다. 이를 줄이려면 스레드가 아니라 **출력을 바꾸는 알고리즘 변경**이 필요합니다(프로젝트 노트 참조).
+상한이 ≈1.45×입니다. 이를 줄이려면 스레드가 아니라 **출력을 바꾸는 알고리즘 변경**이 필요합니다.
+
+`input_HaloMaker.dat`에서 `optimize_nodes = .true.`(기본값 `.false.` = 기존 경로)로 설정하면 그런 경로가
+켜집니다: 대형 component는 그룹별 **blocked prefix-moment 인덱스**(레벨별 재스캔을 O(log n) 조회로 대체)로
+요약하고, 소형(`< 1000` 입자)·임계근접 component는 정확한 legacy 계산으로 fallback하여 카탈로그가 **기존
+출력과 bit-for-bit 동일**하게 유지됩니다(frozen 골든에서 `real_regression=0` 검증). 39990 풀박스에서
+`create nodes` 단계가 ~1428초 → ~102초(≈14×)로 줄고 peak 메모리는 **+4.8 MB**입니다.
 
 ### 출력 단위 (breaking change: `halomaker_units_v2`)
 

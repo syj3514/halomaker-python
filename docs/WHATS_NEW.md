@@ -34,6 +34,12 @@ HaloMaker alone does not produce.
   multi-snapshot batches. The CLI mode is unchanged, and both modes were
   verified to produce identical output (only pre-existing runtime timing
   fields differ between any two runs). See `examples/*.example`.
+- **Robustness — non-virialized halos:** GasMaker now tolerates `rvir=NaN`
+  halos (non-virialized/degenerate; HaloMaker emits NaN virial fields since the
+  TASK-21 fix). The `_rvir` aperture is skipped and its `*_rvir` fields left NaN
+  instead of aborting the whole run; r200/r500/halo-scale fields are unaffected.
+  (Multi-snapshot config-mode summaries are also flushed per job so their stdout
+  summary stays ordered relative to the next job's stderr header.)
 - **Run-wide progress reporting:** long runs now show a startup banner, stage
   timings, per-root progress (tqdm bar on a terminal, timestamped plain lines
   when redirected — never `\r` spam in log files), and an end summary (wall
