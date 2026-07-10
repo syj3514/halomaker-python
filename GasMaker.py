@@ -206,11 +206,14 @@ def _run_job(args):
         reader.close()
 
     progress.finish(status)
-    print(f"requested_roots={','.join(str(item) for item in status['requested'])}")
-    print(f"processed_roots={','.join(str(item) for item in status['processed'])}")
-    print(f"skipped_roots={','.join(str(item) for item in status['skipped'])}")
-    print(f"remaining_roots={','.join(str(item) for item in status['remaining'])}")
-    print(f"output={args.output}")
+    # flush=True so a job's stdout summary is not held in the pipe buffer and
+    # printed after the *next* job's stderr header (config mode runs jobs
+    # sequentially; unbuffered flush keeps per-job summaries in order).
+    print(f"requested_roots={','.join(str(item) for item in status['requested'])}", flush=True)
+    print(f"processed_roots={','.join(str(item) for item in status['processed'])}", flush=True)
+    print(f"skipped_roots={','.join(str(item) for item in status['skipped'])}", flush=True)
+    print(f"remaining_roots={','.join(str(item) for item in status['remaining'])}", flush=True)
+    print(f"output={args.output}", flush=True)
 
 
 def _run_config_mode(parser):
