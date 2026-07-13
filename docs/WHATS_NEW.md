@@ -79,6 +79,24 @@ HaloMaker alone does not produce.
 
 ## 🌟 HaloMaker — major changes
 
+### DM / star family-select mode  **[released — TASK-29]**
+A new `family` config (`all` | `dm` | `star`, default `all`) selects the
+particle family **at the RAMSES read stage**, reuniting the classic
+HaloMaker-on-DM / GalaxyMaker-on-stars split inside the one optimized pipeline.
+`dm` loads only DM (no age/metal/chemistry allocated); `star` loads only stars;
+`all` is the existing unified behaviour. Because the target family is filtered
+during the read, separated modes are both **faster and lighter** — on 07206,
+`dm` cut runtime **-75.8%** / peak RSS **-39.2%** and `star` **-58.2%** / **-48.9%**
+versus `all`. Separated modes add `/member/source_pids` (`abs(RAMSES idp)`) for
+tracing members back to the snapshot, and record `family` in the `header`/`input`
+attrs; `all` output is unchanged.
+- Output-neutral in `all`: **byte-exact** vs a clean pre-feature build on
+  07206 (Ra3), 39990 (Ra3, largest root) and NH2-101 (Ra4).
+- Cross-checked against the **legacy Fortran HaloMaker/GalaxyMaker** catalogs on
+  07206: object count, membership (Jaccard 1.0), mass, center and `nmem` match
+  exactly (the legacy stored radius is excluded as self-inconsistent with its own
+  members; the Python radius is self-consistent to 1e-14).
+
 ### Physically-correct virial masses  **[released, breaking — TASK-21]**
 The virial radius/mass scan (`|2K+W|/|K+W| ≤ 0.2`) used a potential-energy
 profile with **no radius dependence** — a constant whole-halo shape factor

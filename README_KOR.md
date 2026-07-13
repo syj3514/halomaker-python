@@ -112,6 +112,13 @@ snapshot header를 읽은 뒤 확정됩니다.
 구분됩니다(`tree_bricks{n}_{tag}.h5`) — 덮어쓰기 없음. 단일 snapshot은 기존
 `tree_bricks{n:05d}.h5` 이름을 유지합니다.
 
+`family`는 분석할 입자 family를 고릅니다: `all`(기본; DM+star 통합), `dm`(암흑물질만,
+기존 HaloMaker halo finder), `star`(항성만, 기존 GalaxyMaker galaxy finder). family를
+read 단계에서 걸러내므로 `dm`/`star` run은 `all`보다 빠르고 메모리도 적게 씁니다(예: `dm`은
+항성 age/metal/chemistry를 읽지 않음). 없는 family의 속성은 `0`(가산량) 또는 `NaN`(정의불가);
+출력 스키마는 모드 무관 동일하고 `family`가 header에 기록됩니다. 파일명은 모드로 바뀌지
+않으므로, 분리 모드는 서로 다른 run 디렉토리/prefix로 실행해 덮어쓰기를 피하세요.
+
 권장 print level은 다음과 같습니다.
 
 - `verbose = .false.`, `megaverbose = .false.`: compact production log.
@@ -162,6 +169,8 @@ per-element 항성 화학조성을 저장하는 Ra4 스냅샷의 경우, catalog
 `H_star, O_star, Fe_star, Mg_star, C_star, N_star, Si_star, S_star, D_star`(mass fraction)도
 포함됩니다(항성 chem 없는 스냅샷은 `NaN`). 전 멤버 pos/vel/mass를 함께 내보내려면
 `dump_members`를 켭니다(전 멤버 dump 의미; 옛 키 `dump_DMs`/`dump_stars`도 alias로 동작).
+`dm`/`star` family 모드에서는 `/member` 그룹에 `source_pids`(`abs(RAMSES idp)`)가 추가돼
+멤버를 스냅샷으로 역추적할 수 있습니다.
 
 Run이 Ctrl-C로 interrupt되었거나 scheduler에 의해 kill되었거나 Python
 `forkserver` / `resource_tracker` process가 남은 경우, 다음 명령으로 runtime

@@ -114,6 +114,16 @@ When chained snapshots share an output number, output filenames are
 auto-disambiguated (`tree_bricks{n}_{tag}.h5`) so none are overwritten; a single
 snapshot keeps the plain `tree_bricks{n:05d}.h5` name.
 
+`family` selects which particle family is analysed: `all` (default; DM + stars,
+the unified behaviour), `dm` (dark matter only, the classic HaloMaker halo
+finder), or `star` (stars only, the classic GalaxyMaker galaxy finder). The
+family is filtered at the read stage, so `dm`/`star` runs are faster and use
+less memory than `all` (e.g. `dm` skips loading stellar age/metal/chemistry).
+Absent-family properties become `0` (additive) or `NaN` (undefined); the output
+schema is unchanged across modes, `family` is recorded in the header, and the
+output filename is not changed by the mode (point separate modes at different
+run directories or prefixes to avoid overwrites).
+
 Recommended print levels:
 
 - `verbose = .false.`, `megaverbose = .false.`: compact production log.
@@ -187,7 +197,9 @@ includes mass-weighted per-element stellar abundances `H_star, O_star, Fe_star,
 Mg_star, C_star, N_star, Si_star, S_star, D_star` (mass fraction); snapshots
 without stellar chemistry leave these `NaN`. Set `dump_members` (which writes
 per-member pos/vel/mass for all members; the old keys `dump_DMs`/`dump_stars`
-still work) to also export the flat `/member` arrays. See `docs/CATALOG_FORMAT.md`.
+still work) to also export the flat `/member` arrays. In `dm`/`star` family
+modes the `/member` group additionally carries `source_pids` (`abs(RAMSES idp)`)
+so members can be traced back to the snapshot. See `docs/CATALOG_FORMAT.md`.
 
 If a run is interrupted with Ctrl-C, killed by a scheduler, or leaves Python
 `forkserver` / `resource_tracker` processes behind, inspect and clean runtime
