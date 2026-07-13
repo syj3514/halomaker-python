@@ -161,6 +161,12 @@ def init_cosmo_01():
             setattr(H, attr, value)
             print(f'[override] H.{attr} = {value}')
 
+    H.family = str(H.family).strip().lower()
+    if H.family not in {'all', 'dm', 'star'}:
+        raise ValueError(
+            f"family must be one of all, dm, star; got {H.family!r}")
+    print(f'[postprocess] H.family = {H.family}')
+
 
     header_keys = ('omega_f', 'omega_lambda_f', 'Lf')
     missing_header_values = [key for key in header_keys if not cosmo_given[key]]
@@ -295,6 +301,7 @@ def new_step_1():
         if(H.allocated('metal_10')): H.deallocate('metal_10')
         if(H.allocated('chem_10')): H.deallocate('chem_10')
         if(H.allocated('m0_10')): H.deallocate('m0_10')
+        if(H.allocated('source_pid_10')): H.deallocate('source_pid_10')
         if(len(H.liste_halos_o0)>0): H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
         return
     if(H.verbose): print(f"\n$$ Read data done ({time.time()-_ref:.2f} sec)", flush=True)
@@ -345,6 +352,7 @@ def new_step_1():
         if(H.allocated('metal_10')): H.deallocate('metal_10')
         if(H.allocated('chem_10')): H.deallocate('chem_10')
         if(H.allocated('m0_10')): H.deallocate('m0_10')
+        if(H.allocated('source_pid_10')): H.deallocate('source_pid_10')
         H.deallocate('whereIam_parts')
         return
 
@@ -518,6 +526,7 @@ def new_step_1():
     if(H.allocated('metal_10')): H.deallocate('metal_10')
     if(H.allocated('chem_10')): H.deallocate('chem_10')
     if(H.allocated('m0_10')): H.deallocate('m0_10')
+    if(H.allocated('source_pid_10')): H.deallocate('source_pid_10')
     if(not H.cdm): H.deallocate('density_1312')
 
     read_time_end = time.time()

@@ -620,7 +620,8 @@ def _read_ramses_new_1010(icpu, kwargs):
     H.ndim = kwargs['ndim']
     scale_l = kwargs['scale_l']
     scale_t = kwargs['scale_t']
-    dmcount = kwargs['dmcount']
+    count_only = kwargs['count_only']
+    family = kwargs['family']
 
     nomfich = f"{repository}/part_{nchar}.out{icpu:05d}"
     with FortranFile(nomfich, 'r') as f:
@@ -633,7 +634,7 @@ def _read_ramses_new_1010(icpu, kwargs):
         nsink, = f.read_ints()
         # assert nsize[icpu-1] == npart2
 
-        if dmcount:
+        if count_only:
             skip_records(f,H.ndim)
             skip_records(f,H.ndim)
             skip_records(f,1)
@@ -664,13 +665,15 @@ def _read_ramses_new_1010(icpu, kwargs):
             # read particle tag
             skip_records(f, 1)
         if((nstar>0)or(nsink>0)):
-            if rver == 'Ra4' and not dmcount:
+            keep_stellar = not count_only and family in {'all', 'star'}
+            if rver == 'Ra4' and keep_stellar:
                 tmpt, tmpmetal, tmpm0, tmpchem = _read_ra4_stellar_record_block(
-                    f, npart2, kwargs['stellar_descriptor'], dmcount
+                    f, npart2, kwargs['stellar_descriptor'], False
                 )
-            elif(rver != 'Ra4' or not dmcount):
+            elif rver != 'Ra4':
+                # Ra3 needs birth time even in count/dm mode to classify families.
                 tmpt = f.read_reals()
-            if not dmcount and rver != 'Ra4':
+            if rver != 'Ra4' and keep_stellar:
                 tmpmetal = f.read_reals()
                 if kwargs['m0_skip'] is not None:
                     skip_records(f, kwargs['m0_skip'])
@@ -680,49 +683,67 @@ def _read_ramses_new_1010(icpu, kwargs):
     # now sort DM particles in ascending id order and get rid of stars
     if(rver=='Ra4'):
         dmmask = fam==1
-        if dmcount:
-            mask = dmmask # DM particles only
-        else:
-            starmask = (fam==2)
-            mask = dmmask | starmask
+        starmask = fam==2
     else:
         if tmpt is None:
             tmpt = np.zeros(npart2, dtype=np.float64)
         dmmask = (idp>0)&(tmpt==0)
-        if dmcount:
-            mask = dmmask
-        else:
-            starmask = ((tmpt < 0) & (idp > 0)) | ((tmpt != 0) & (idp < 0))
-            mask = dmmask | starmask
-    if not dmcount:
-        idp = np.abs(idp)
-        star_slots = idp[starmask] - 1
-        idp = np.where(starmask, idp+H.ndm, idp)
-    npart_tmp = np.sum(mask)
-    if not dmcount:
-        ind = idp[mask]-1
-        pos_tmp_101 = H.maccess('pos_tmp_101')
-        for idim0 in range(H.ndim):
-            # put all positions between -0.5 and 0.5
-            pos_tmp_101[ind,idim0] = tmpp[mask,idim0]-0.5
-            # convert code units to km/s 
-            mem['vel_tmp_101'][ind,idim0] = tmpv[mask,idim0]*scale_l/scale_t*1e-5
-        mem['mass_tmp_101'][ind] = tmpm[mask]
-        if starmask.any():
-            age_10 = H.maccess('age_10')
-            metal_10 = H.maccess('metal_10')
-            age_10[star_slots] = (
-                kwargs['snapshot_age'] - H.epoch_to_age(tmpt[starmask]))
-            metal_10[star_slots] = tmpmetal[starmask]
-            if tmpm0 is not None:
-                H.maccess('m0_10')[star_slots] = tmpm0[starmask]
-            if H.allocated('chem_10'):
-                chem_10 = H.maccess('chem_10')
-                for element_index, element in enumerate(CHEM_ELEMENTS):
-                    values = tmpchem.get(element)
-                    if values is not None:
-                        chem_10[star_slots, element_index] = values[starmask]
-    return npart_tmp
+        starmask = ((tmpt < 0) & (idp > 0)) | ((tmpt != 0) & (idp < 0))
+
+    ndm = int(np.count_nonzero(dmmask))
+    nstar_selected = int(np.count_nonzero(starmask))
+    if family == 'all':
+        mask = dmmask | starmask
+    elif family == 'dm':
+        mask = dmmask
+    else:
+        mask = starmask
+    nselected = int(np.count_nonzero(mask))
+    if count_only:
+        return ndm, nstar_selected, nselected
+
+    source_ids = np.abs(idp)
+    if family == 'all':
+        local_ids = np.where(starmask, source_ids + kwargs['ndm'], source_ids)
+    else:
+        local_ids = source_ids
+    ind = local_ids[mask] - 1
+    if (
+        np.any(ind < 0)
+        or np.any(ind >= kwargs['nselected'])
+        or len(np.unique(ind)) != len(ind)
+    ):
+        raise RuntimeError(
+            f"Non-dense or duplicate {family} particle IDs in icpu={icpu}: "
+            f"selected={nselected}, range={ind.min(initial=-1)}..{ind.max(initial=-1)}, "
+            f"capacity={kwargs['nselected']}")
+
+    pos_tmp_101 = H.maccess('pos_tmp_101')
+    for idim0 in range(H.ndim):
+        # put all positions between -0.5 and 0.5
+        pos_tmp_101[ind,idim0] = tmpp[mask,idim0]-0.5
+        # convert code units to km/s
+        mem['vel_tmp_101'][ind,idim0] = tmpv[mask,idim0]*scale_l/scale_t*1e-5
+    mem['mass_tmp_101'][ind] = tmpm[mask]
+    if family != 'all':
+        H.maccess('source_pid_10')[ind] = source_ids[mask]
+
+    if family in {'all', 'star'} and nstar_selected:
+        star_slots = source_ids[starmask] - 1
+        age_10 = H.maccess('age_10')
+        metal_10 = H.maccess('metal_10')
+        age_10[star_slots] = (
+            kwargs['snapshot_age'] - H.epoch_to_age(tmpt[starmask]))
+        metal_10[star_slots] = tmpmetal[starmask]
+        if tmpm0 is not None:
+            H.maccess('m0_10')[star_slots] = tmpm0[starmask]
+        if H.allocated('chem_10'):
+            chem_10 = H.maccess('chem_10')
+            for element_index, element in enumerate(CHEM_ELEMENTS):
+                values = tmpchem.get(element)
+                if values is not None:
+                    chem_10[star_slots, element_index] = values[starmask]
+    return ndm, nstar_selected, nselected
 #***********************************************************************
 import time
 def read_ramses_new_101(repository, rver='Ra3'):
@@ -801,7 +822,7 @@ def read_ramses_new_101(repository, rver='Ra3'):
         H.ncpu, = f.read_ints()
         H.ndim, = f.read_ints()
 
-    H.npart = 0
+    total_npart = 0
     # nsize = np.zeros(H.ncpu, dtype=np.int32)
     for icpu1 in range(1,H.ncpu+1):
         nomfich = f"{repository}/part_{nchar}.out{icpu1:05d}"
@@ -814,31 +835,26 @@ def read_ramses_new_101(repository, rver='Ra3'):
             idum = f.read_ints()
             idum = f.read_ints()
             nsink, = f.read_ints()
-        H.npart += npart2
+        total_npart += npart2
 
-    if(H.verbose): print(f"\t|> Found {H.npart} Total particles")
-    H.nstar = nstar
-    H.nusedpart = H.npart
-    if(H.verbose): print(f"\t|        {H.npart-H.nstar} other particles")
-    if(H.verbose): print(f"\t|        {nstar} star particles")
-    if(H.verbose): print(f"\t|> Reading positions, velocities and masses...")
-    H.allocate('pos_tmp_101', (H.nusedpart, H.ndim), dtype=np.float64)
-    H.allocate('vel_tmp_101', (H.nusedpart, H.ndim), dtype=np.float64)
-    H.allocate('mass_tmp_101', (H.nusedpart,), dtype=np.float64)
-    H.massalloc = True
-  
-    # Count only DM particles
+    if(H.verbose): print(f"\t|> Found {total_npart} Total particles")
+
+    # Count both supported families before allocating persistent particle arrays.
     kwargs = {
         'repository':repository, 'rver':rver, 'nchar':nchar,
         'ndim':H.ndim, 'scale_l':scale_l, 'scale_t':scale_t,
-        'snapshot_age':snapshot_age, 'dmcount':True,
+        'snapshot_age':snapshot_age, 'count_only':True,
+        'family':H.family,
         'm0_skip':m0_skip, 'stellar_descriptor':stellar_descriptor}
     iterobj = range(1,H.ncpu+1)
     if(H.nbPes==1): # Sequential reading
-        if(H.TQDM)and(H.megaverbose): pbar = tqdm(total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", file=sys.stdout, disable=(not H.megaverbose), ncols=100)
-        ndm = 0
+        if(H.TQDM)and(H.megaverbose): pbar = tqdm(total=H.ncpu, desc=f"\t|  Count families (nbPes={H.nbPes})", unit="cpu", file=sys.stdout, disable=(not H.megaverbose), ncols=100)
+        ndm = nstar_masked = nselected = 0
         for icpu1 in iterobj:
-            ndm += _read_ramses_new_1010(icpu1, kwargs)
+            idm, istar, iselected = _read_ramses_new_1010(icpu1, kwargs)
+            ndm += idm
+            nstar_masked += istar
+            nselected += iselected
             if(H.TQDM)and(H.megaverbose): pbar.update(1)
         if(H.TQDM)and(H.megaverbose): pbar.close()
     else: # Multiprocessing
@@ -848,18 +864,49 @@ def read_ramses_new_101(repository, rver='Ra3'):
             for icpu1 in iterobj:
                 r = pool.apply_async(_read_ramses_new_1010, (icpu1, kwargs))
                 async_results.append((icpu1, r))
-            ndm = 0
-            for icpu1, r in tqdm(async_results, total=H.ncpu, desc=f"\t|  Count DMs (nbPes={H.nbPes})", unit="cpu", disable=(not H.megaverbose), ncols=100):
+            ndm = nstar_masked = nselected = 0
+            for icpu1, r in tqdm(async_results, total=H.ncpu, desc=f"\t|  Count families (nbPes={H.nbPes})", unit="cpu", disable=(not H.megaverbose), ncols=100):
                 try:
-                    ndm += r.get(timeout=300)  # 300 sec
+                    idm, istar, iselected = r.get(timeout=300)  # 300 sec
+                    ndm += idm
+                    nstar_masked += istar
+                    nselected += iselected
                 except TimeoutError:
                     print(f"\n[HANG?] icpu={icpu1} still not finished after 300s")
                     raise
         signal.signal(signal.SIGTERM, H.flush)
-    H.ndm =ndm
-    if(H.verbose): print(f"\t|> Found {H.ndm} DM particles after masking")
+    if ndm + nstar_masked > total_npart:
+        raise RuntimeError(
+            f"Family masks exceed total particles: dm={ndm}, star={nstar_masked}, "
+            f"total={total_npart}")
+    expected_selected = {
+        'all': ndm + nstar_masked,
+        'dm': ndm,
+        'star': nstar_masked,
+    }[H.family]
+    if nselected != expected_selected:
+        raise RuntimeError(
+            f"Selected-count mismatch for family={H.family}: "
+            f"counted={nselected}, expected={expected_selected}")
 
-    H.nusedpart = H.ndm + H.nstar
+    H.ndm = ndm if H.family in {'all', 'dm'} else 0
+    # Preserve the historical header/schema dtype (RAMSES nstar is int32).
+    H.nstar = np.int32(nstar_masked if H.family in {'all', 'star'} else 0)
+    H.npart = nselected
+    H.nusedpart = nselected
+    if(H.verbose): print(f"\t|> Family counts: dm={ndm}, star={nstar_masked}, selected={nselected} ({H.family})")
+    if H.npart == 0:
+        raise RuntimeError(f"No particles selected for family={H.family}")
+
+    if(H.verbose): print(f"\t|> Reading positions, velocities and masses...")
+    H.allocate('pos_tmp_101', (H.nusedpart, H.ndim), dtype=np.float64)
+    H.allocate('vel_tmp_101', (H.nusedpart, H.ndim), dtype=np.float64)
+    H.allocate('mass_tmp_101', (H.nusedpart,), dtype=np.float64)
+    if H.family != 'all':
+        H.allocate('source_pid_10', (H.nusedpart,), dtype=np.int64)
+        mem['source_pid_10'][:] = -1
+    H.massalloc = True
+
     if H.nstar > 0:
         H.allocate('age_10', (H.nstar,), dtype=np.float64)
         H.allocate('metal_10', (H.nstar,), dtype=np.float64)
@@ -871,14 +918,19 @@ def read_ramses_new_101(repository, rver='Ra3'):
         if H.nchem > 0:
             H.allocate('chem_10', (H.nstar, len(CHEM_ELEMENTS)), dtype=np.float64)
             mem['chem_10'][:, :] = np.nan
-    # Read all parts
-    kwargs['dmcount'] = False
+    # Load selected parts into the already-sized shared arrays.
+    kwargs['count_only'] = False
+    kwargs['ndm'] = H.ndm
+    kwargs['nselected'] = H.npart
     iterobj = range(1,H.ncpu+1)
     if(H.nbPes==1): # Sequential reading
         if(H.TQDM)and(H.megaverbose): pbar = tqdm(total=H.ncpu, desc=f"\t|  Reading parts(nbPes={H.nbPes})", unit="cpu", file=sys.stdout, ncols=100)
-        npart = 0
+        loaded_dm = loaded_star = loaded_selected = 0
         for icpu1 in iterobj:
-            npart += _read_ramses_new_1010(icpu1, kwargs)
+            idm, istar, iselected = _read_ramses_new_1010(icpu1, kwargs)
+            loaded_dm += idm
+            loaded_star += istar
+            loaded_selected += iselected
             if(H.TQDM)and(H.megaverbose): pbar.update(1)
         if(H.TQDM)and(H.megaverbose): pbar.close()
     else: # Multiprocessing
@@ -888,17 +940,32 @@ def read_ramses_new_101(repository, rver='Ra3'):
             for icpu1 in iterobj:
                 r = pool.apply_async(_read_ramses_new_1010, (icpu1, kwargs))
                 async_results.append((icpu1, r))
-            npart = 0
+            loaded_dm = loaded_star = loaded_selected = 0
             for icpu1, r in tqdm(async_results, total=H.ncpu, desc=f"\t|  Reading parts(nbPes={H.nbPes})", unit="cpu", disable=(not H.megaverbose), ncols=100):
                 try:
-                    npart += r.get(timeout=300)  # 300 sec
+                    idm, istar, iselected = r.get(timeout=300)  # 300 sec
+                    loaded_dm += idm
+                    loaded_star += istar
+                    loaded_selected += iselected
                 except TimeoutError:
                     print(f"\n[HANG?] icpu={icpu1} still not finished after 300s")
                     raise
         signal.signal(signal.SIGTERM, H.flush)
-    H.npart = npart
+    if (loaded_dm, loaded_star, loaded_selected) != (ndm, nstar_masked, nselected):
+        raise RuntimeError(
+            "Count/load family mismatch: "
+            f"count={(ndm, nstar_masked, nselected)}, "
+            f"load={(loaded_dm, loaded_star, loaded_selected)}")
+    if H.family != 'all':
+        source_pids = mem['source_pid_10']
+        if np.any(source_pids < 1) or len(np.unique(source_pids)) != H.npart:
+            raise RuntimeError(
+                f"Incomplete or duplicate source PIDs for family={H.family}")
+        if not np.array_equal(np.sort(source_pids), np.arange(1, H.npart + 1)):
+            raise RuntimeError(
+                f"Non-dense source PIDs for family={H.family}; explicit map required")
     if(H.verbose): print(f"\t|> Reading parts done", flush=True)
-    if(H.verbose): print(f"\t|> Found {H.npart} (DM+Star) particles after masking")
+    if(H.verbose): print(f"\t|> Found {H.npart} selected particles after masking")
     if H.nstar > 0:
         n_age = np.sum(np.isfinite(mem['age_10']))
         n_metal = np.sum(np.isfinite(mem['metal_10']))
@@ -950,11 +1017,15 @@ def read_ramses_new_101(repository, rver='Ra3'):
     mtot = np.sum(mem['mass_10'])
     # that is for the dark matter so let's add baryons now if there are any 
     # and renormalization flag is on ##
-    dmmassres = np.min(mem['mass_10'][:H.ndm])*H.mboxp*1e11
-    starmassres = np.min(mem['mass_10'][H.ndm:])*H.mboxp*1e11
-    H.massp   = np.min(mem['mass_10'][:H.ndm])
-    if(H.verbose): print(f"\t|> DM particle mass (in M_sun)               = {dmmassres}")
-    if(H.verbose): print(f"\t|> Star particle mass (in M_sun)             = {starmassres}")
+    if H.ndm > 0:
+        H.massp = np.min(mem['mass_10'][:H.ndm])
+        dmmassres = H.massp * H.mboxp * 1e11
+        if(H.verbose): print(f"\t|> DM particle mass (in M_sun)               = {dmmassres}")
+    else:
+        H.massp = np.float64(np.nan)
+    if H.nstar > 0:
+        starmassres = np.min(mem['mass_10'][H.ndm:]) * H.mboxp * 1e11
+        if(H.verbose): print(f"\t|> Star particle mass (in M_sun)             = {starmassres}")
     if(H.RENORM):
         massres /= mtot
         H.massp /= mtot
@@ -1009,6 +1080,7 @@ def write_tree_brick_hdf():
         header.attrs['nusedpart'] = H.nusedpart
         header.attrs['ndm'] = H.ndm
         header.attrs['nstar'] = H.nstar
+        header.attrs['family'] = H.family
         header.attrs['massp'] = H.massp
         header.attrs['aexp'] = H.aexp
         header.attrs['omega_t'] = H.omega_t
@@ -1068,6 +1140,7 @@ def write_tree_brick_hdf():
         finput.attrs['eps_SC']=H.eps_SC
         finput.attrs['nsteps']=H.nsteps
         finput.attrs['dump_members']=dump_members
+        finput.attrs['family']=H.family
         #---------------------------------
         # Catalog
         #---------------------------------
@@ -1118,12 +1191,20 @@ def write_tree_brick_hdf():
         grp = f44.create_group('member')
         grp.attrs['index_base'] = 1
         grp.attrs['layout'] = 'flat'
+        if H.family != 'all':
+            grp.attrs['pids_semantics'] = 'catalog_local_1based'
+            grp.attrs['source_pids_semantics'] = 'abs_ramses_particle_id'
         grp.create_dataset('index', data=whereIam_idxs, compression='lzf')
         grp.create_dataset('count', data=whereIam_counts, compression='lzf')
         pids = pids0_groupsorted+1 # 0-based to 1-based
         
         member_chunk = min(max(1, len(pids)), 65536)
         grp.create_dataset('pids', data=pids, compression='lzf', chunks=(member_chunk,))
+        if H.family != 'all':
+            source_pids = mem['source_pid_10'][pids0_groupsorted]
+            grp.create_dataset(
+                'source_pids', data=source_pids,
+                compression='lzf', chunks=(member_chunk,))
         if dump_members:
             grp.attrs['fields'] = 'pids,pos,vel,mass'
             pos_ds = grp.create_dataset(

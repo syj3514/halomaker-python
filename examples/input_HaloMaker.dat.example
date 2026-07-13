@@ -9,6 +9,7 @@ H_f            =  70.300  ! Hubble constant (in Km/s/Mpc) at z=0 (optional; see 
 # lambda_f     =  0.728  ! Omega lambda at z=0 (ex: 0.7)
 npart          =  100     ! Minimum number of particles per halo (ex:10)
 method         =  MSM     ! choose between FOF, HOP, MSM etc .. (view ReadMe for details).
+family         =  all     ! particle family selection: all, dm, or star
 cdm            =  .false.
 b              =  0.2     ! fof parameter "b" (usually b=0.2)
 nvoisins       = 100      ! parameter for adaptahop (usually 20) Maximum Nparts per KDtree
