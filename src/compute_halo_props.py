@@ -166,6 +166,7 @@ def init_cosmo_01():
         raise ValueError(
             f"family must be one of all, dm, star; got {H.family!r}")
     print(f'[postprocess] H.family = {H.family}')
+    print(f'[postprocess] H.photometry = {H.photometry}')
 
 
     header_keys = ('omega_f', 'omega_lambda_f', 'Lf')
@@ -254,7 +255,8 @@ def _compute_halo_props(ih1, member, fagor, printdatacheckhalo):
     det_vir_1b(h, fagor=fagor, member=member)
     compute_spin_parameter_1c(h)
     compute_stellar_1d(h, member=member)
-    compute_ssp_photometry_1f(ih1, h, member=member)
+    if H.photometry:
+        compute_ssp_photometry_1f(ih1, h, member=member)
     compute_extended_profiles_1e(h, member=member)
 
     if(printdatacheckhalo): print('> mass:', h['m'], 'mhalo:', h['mdm'], 'mstar:', h['m*'])
@@ -422,16 +424,17 @@ def new_step_1():
     # allocation and initialization of the halo list
     H.allocate('liste_halos_o0', H.nb_of_halos+H.nb_of_subhalos+1, dtype=H.halo_dtype)
     H.liste_halos_o0 = mem['liste_halos_o0']
-    for model in MODELS:
-        photometry = H.allocate(
-            f'photometry_{model.lower()}',
-            H.nb_of_halos+H.nb_of_subhalos+1,
-            dtype=H.photometry_ssp_dtype,
-        )
-        photometry['id'] = 0
-        for field in H.photometry_ssp_fields:
-            photometry[field] = np.nan
-    load_all_tables()
+    if H.photometry:
+        for model in MODELS:
+            photometry = H.allocate(
+                f'photometry_{model.lower()}',
+                H.nb_of_halos+H.nb_of_subhalos+1,
+                dtype=H.photometry_ssp_dtype,
+            )
+            photometry['id'] = 0
+            for field in H.photometry_ssp_fields:
+                photometry[field] = np.nan
+        load_all_tables()
     # (liste_halos_o0 is list of `halo` class, and defined in `halo_defs`)
     # (It may should be changed to shared memory if you want to implement the multiprocessing)
 
@@ -516,8 +519,9 @@ def new_step_1():
     # H.liste_halos_o0 = []
     H.liste_halos_o0 = np.empty(0, dtype=H.halo_dtype)
     H.deallocate('liste_halos_o0')
-    for model in MODELS:
-        H.deallocate(f'photometry_{model.lower()}')
+    if H.photometry:
+        for model in MODELS:
+            H.deallocate(f'photometry_{model.lower()}')
     # H.deallocate('nb_of_parts_o0_1','first_part_oo_1','linked_list_oo_1')
     H.deallocate('pos_10','vel_10')
     H.deallocate('whereIam_idxs','whereIam_counts','pids0_groupsorted')
@@ -1708,6 +1712,8 @@ def compute_stellar_1d(h:np.void, member=None):
                 h[f'sigcyl{suffix}'] = sigcyl
 
 def compute_ssp_photometry_1f(ih1, h:np.void, member=None):
+    if not H.photometry:
+        return
     count, indexps, mypos, myvel, mymass, mydensity = member
     for model in MODELS:
         mem[f'photometry_{model.lower()}'][ih1]['id'] = h['id']

@@ -17,7 +17,40 @@ BANDS = (
 BAND_INDEX = {name: index for index, (name, _, _) in enumerate(BANDS)}
 MODELS = ("CB07", "BC03", "FSPS")
 
+SSP_SOURCES = {
+    "BC03": {
+        "environment": "BC03_PATH",
+        "url": "https://www.bruzual.org/bc03/Original_version_2003/",
+    },
+    "CB07": {
+        "environment": "CB07_PATH",
+        "url": "https://www.bruzual.org/cb07/",
+    },
+    "FSPS": {
+        "environment": "FSPS_PATH (or SPS_HOME)",
+        "url": "https://github.com/cconroy20/fsps",
+    },
+}
+
 _TABLES = {}
+
+
+def missing_table_message(model, path):
+    model = model.upper()
+    source = SSP_SOURCES[model]
+    filename = f"{model.lower()}.npz"
+    return f"""Missing {model} SSP photometry table.
+Expected compact table: {path}
+Photometry is enabled and requires all three compact SSP tables.
+
+Resolve this in one of these ways:
+  1. Generate it from the original model data: set {source['environment']},
+     then rerun build.sh. Source information: {source['url']}
+  2. Copy a trusted prebuilt {filename} into halomaker_data/ssp_tables/
+     and verify its checksum against the provider's manifest.
+  3. For a halo-only run, set `photometry = .false.` in input_HaloMaker.dat.
+     Build without SSP preparation using `HALOMAKER_SKIP_SSP=1 bash build.sh`.
+"""
 
 
 def _text(value):
@@ -37,7 +70,13 @@ def load_table(model):
     path = files("halomaker_data.ssp_tables").joinpath(
         f"{model.lower()}.npz"
     )
-    with np.load(path, allow_pickle=False) as source:
+    if not path.is_file():
+        raise FileNotFoundError(missing_table_message(model, path))
+    try:
+        source_context = np.load(path, allow_pickle=False)
+    except FileNotFoundError:
+        raise FileNotFoundError(missing_table_message(model, path)) from None
+    with source_context as source:
         field_names = tuple(str(name) for name in source["field_names"])
         if field_names != tuple(name for name, _, _ in BANDS):
             raise ValueError(f"Unexpected photometry fields in {path}: {field_names}")

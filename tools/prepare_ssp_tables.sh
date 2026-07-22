@@ -11,16 +11,20 @@ BC03_SOURCE="${BC03_PATH:-$ROOT/assets/ssp_originals/bc03}"
 CB07_SOURCE="${CB07_PATH:-$ROOT/assets/ssp_originals/cb07}"
 FSPS_SOURCE="${FSPS_PATH:-${SPS_HOME:-}}"
 
+missing_table_help() {
+    local model="$1"
+    local path="$2"
+    PYTHONPATH="$ROOT/src:$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
+        "$PYTHON" -c \
+        'from ssp_photometry import missing_table_message; import sys; print(missing_table_message(sys.argv[1], sys.argv[2]), end="")' \
+        "$model" "$path" >&2
+}
+
 if [[ -f "$BC03_TABLE" ]]; then
     echo "Using existing BC03 table: $BC03_TABLE"
 else
     if [[ ! -e "$BC03_SOURCE" ]]; then
-        cat >&2 <<EOF
-Missing BC03 table: $BC03_TABLE
-Set BC03_PATH to a BC03 source tarball or extracted directory, then rerun build.sh.
-Default source location is $ROOT/assets/ssp_originals/bc03 when available.
-The BC03 source is not redistributed with HaloMaker.
-EOF
+        missing_table_help BC03 "$BC03_TABLE"
         exit 1
     fi
 
@@ -33,12 +37,7 @@ if [[ -f "$CB07_TABLE" ]]; then
     echo "Using existing CB07 table: $CB07_TABLE"
 else
     if [[ ! -d "$CB07_SOURCE" ]]; then
-        cat >&2 <<EOF
-Missing CB07 table: $CB07_TABLE
-Set CB07_PATH to a CB07 source-table directory, then rerun build.sh.
-Default source location is $ROOT/assets/ssp_originals/cb07 when available.
-The CB07 source tables are not redistributed with HaloMaker.
-EOF
+        missing_table_help CB07 "$CB07_TABLE"
         exit 1
     fi
 
@@ -51,12 +50,7 @@ if [[ -f "$FSPS_TABLE" ]]; then
     echo "Using existing FSPS table: $FSPS_TABLE"
 else
     if [[ -z "$FSPS_SOURCE" ]]; then
-        cat >&2 <<EOF
-Missing FSPS table: $FSPS_TABLE
-Set FSPS_PATH to an FSPS source/data installation, then rerun build.sh.
-Install the table generator first if needed:
-  uv sync --extra ssp-generation
-EOF
+        missing_table_help FSPS "$FSPS_TABLE"
         exit 1
     fi
     if [[ ! -d "$FSPS_SOURCE" ]]; then

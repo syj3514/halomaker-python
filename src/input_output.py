@@ -1141,6 +1141,7 @@ def write_tree_brick_hdf():
         finput.attrs['nsteps']=H.nsteps
         finput.attrs['dump_members']=dump_members
         finput.attrs['family']=H.family
+        finput.attrs['photometry']=H.photometry
         #---------------------------------
         # Catalog
         #---------------------------------
@@ -1151,38 +1152,39 @@ def write_tree_brick_hdf():
         halo_ds.attrs['field_units'] = _json_attr(CATALOG_FIELD_UNITS)
         halo_ds.attrs['units_version'] = UNITS_VERSION
 
-        from ssp_photometry import MODELS, model_metadata
-        photometry = f44.create_group('photometry')
-        for requested_model in MODELS:
-            model, metadata = model_metadata(requested_model)
-            photometry_key = f'photometry_{model.lower()}'
-            if photometry_key not in mem:
-                continue
-            model_group = photometry.create_group(model)
-            for key, value in metadata.items():
-                model_group.attrs[key] = value
-            model_group.attrs['mass_source'] = (
-                'initial_mass' if H.allocated('m0_10')
-                else 'current_mass_fallback'
-            )
-            model_group.attrs['interpolation'] = 'bilinear in log-age/log-metallicity, magnitude space'
-            model_group.attrs['frame'] = 'intrinsic rest-frame'
-            model_group.attrs['dust'] = False
-            model_group.attrs['nebular_emission'] = False
-            model_group.attrs['SDSS_system'] = 'AB'
-            model_group.attrs['Johnson_system'] = 'Vega'
-            model_group.attrs['row_alignment'] = '/catalog/halo'
-            photo = _convert_photometry_units(
-                mem[photometry_key][1:],
-                box_physical_mpc,
-            )
-            model_group.attrs['fields'] = ','.join(photo.dtype.names)
-            photo_ds = model_group.create_dataset(
-                'data', shape=photo.shape, dtype=photo.dtype,
-                data=photo, compression='lzf',
-            )
-            photo_ds.attrs['field_units'] = _json_attr(PHOTOMETRY_FIELD_UNITS)
-            photo_ds.attrs['units_version'] = UNITS_VERSION
+        if H.photometry:
+            from ssp_photometry import MODELS, model_metadata
+            photometry = f44.create_group('photometry')
+            for requested_model in MODELS:
+                model, metadata = model_metadata(requested_model)
+                photometry_key = f'photometry_{model.lower()}'
+                if photometry_key not in mem:
+                    continue
+                model_group = photometry.create_group(model)
+                for key, value in metadata.items():
+                    model_group.attrs[key] = value
+                model_group.attrs['mass_source'] = (
+                    'initial_mass' if H.allocated('m0_10')
+                    else 'current_mass_fallback'
+                )
+                model_group.attrs['interpolation'] = 'bilinear in log-age/log-metallicity, magnitude space'
+                model_group.attrs['frame'] = 'intrinsic rest-frame'
+                model_group.attrs['dust'] = False
+                model_group.attrs['nebular_emission'] = False
+                model_group.attrs['SDSS_system'] = 'AB'
+                model_group.attrs['Johnson_system'] = 'Vega'
+                model_group.attrs['row_alignment'] = '/catalog/halo'
+                photo = _convert_photometry_units(
+                    mem[photometry_key][1:],
+                    box_physical_mpc,
+                )
+                model_group.attrs['fields'] = ','.join(photo.dtype.names)
+                photo_ds = model_group.create_dataset(
+                    'data', shape=photo.shape, dtype=photo.dtype,
+                    data=photo, compression='lzf',
+                )
+                photo_ds.attrs['field_units'] = _json_attr(PHOTOMETRY_FIELD_UNITS)
+                photo_ds.attrs['units_version'] = UNITS_VERSION
 
         #---------------------------------
         # Member
