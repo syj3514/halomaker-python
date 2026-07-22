@@ -73,6 +73,10 @@ This creates:
 
 - `compute_adaptahop*.so`
 
+For compiler selection (gfortran or Intel ifort/ifx), OpenMP verification,
+SSP-table setup, threading, and PBS/Slurm job templates, see
+**[Building and Running HaloMaker on HPC Systems](docs/HPC_AND_BUILD.md)**.
+
 Build and run from the same activated Python environment. If you do not want
 to activate the environment, pass the interpreter explicitly:
 
@@ -180,8 +184,8 @@ JSON attributes. Recover physical Mpc with `x_phys = x_code * box_physical_mpc`.
 Analysis scripts that assumed the old units must branch on `units_version`. See
 **`docs/CATALOG_FORMAT.md`** for the full field-by-field unit table.
 
-Each run computes intrinsic rest-frame stellar photometry with all bundled SSP
-models and writes the aligned results under:
+By default, each run computes intrinsic rest-frame stellar photometry with all
+three SSP models and writes the aligned results under:
 
 - `/photometry/CB07/data`
 - `/photometry/BC03/data`
@@ -191,6 +195,9 @@ The datasets contain SDSS `ugriz`, Johnson `UBV`, `Kmag`, and r-band
 luminosity-weighted stellar age, metallicity, `r50`, and `r90`. FSPS uses the
 2MASS Ks response for its `Kmag`; this distinction is recorded in the group
 metadata. See `docs/SSP_MODELS.md` for model definitions and data provenance.
+Set `photometry = .false.` for a halo-only run without SSP tables; this records
+`/input.photometry = false` and omits `/photometry`. See
+`docs/HPC_AND_BUILD.md` for the matching table-free build command.
 
 For Ra4 snapshots that store per-element stellar chemistry, the catalog also
 includes mass-weighted per-element stellar abundances `H_star, O_star, Fe_star,
@@ -311,7 +318,10 @@ the small `gasmaker.readers.base.CellReader` interface (incl. `read_boxes` and
 ## Preparing SSP tables
 
 The compact BC03, CB07, and FSPS tables are not redistributed with HaloMaker.
-Provide the source model data before the first build. Local development copies,
+For photometry-enabled runs, either generate them from the source model data or
+copy trusted prebuilt `.npz` files into `halomaker_data/ssp_tables/`. A
+halo-only build can instead skip them entirely. See
+`docs/HPC_AND_BUILD.md` for all three workflows. Local development copies,
 when present, use the standard ignored locations `assets/ssp_originals/bc03`
 and `assets/ssp_originals/cb07`. Explicit paths override those defaults:
 
