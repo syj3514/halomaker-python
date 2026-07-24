@@ -289,6 +289,14 @@ def _convert_halo_catalog_units(cat, box_physical_mpc):
     return out
 
 
+def _light_catalog(cat):
+    """Pack the canonical light fields into a gap-free compound dtype."""
+    out = np.empty(cat.shape, dtype=H.LIGHT_CATALOG_DTYPE)
+    for field in H.LIGHT_CATALOG_FIELDS:
+        out[field] = cat[field]
+    return out
+
+
 def _convert_photometry_units(photo, box_physical_mpc):
     out = photo.copy()
     for field in ("r50_r", "r90_r"):
@@ -665,7 +673,11 @@ def _read_ramses_new_1010(icpu, kwargs):
             # read particle tag
             skip_records(f, 1)
         if((nstar>0)or(nsink>0)):
-            keep_stellar = not count_only and family in {'all', 'star'}
+            keep_stellar = (
+                kwargs['stellar_payload']
+                and not count_only
+                and family in {'all', 'star'}
+            )
             if rver == 'Ra4' and keep_stellar:
                 tmpt, tmpmetal, tmpm0, tmpchem = _read_ra4_stellar_record_block(
                     f, npart2, kwargs['stellar_descriptor'], False
@@ -678,8 +690,6 @@ def _read_ramses_new_1010(icpu, kwargs):
                 if kwargs['m0_skip'] is not None:
                     skip_records(f, kwargs['m0_skip'])
                     tmpm0 = f.read_reals()
-            elif rver != 'Ra4':
-                skip_records(f, 1)
     # now sort DM particles in ascending id order and get rid of stars
     if(rver=='Ra4'):
         dmmask = fam==1
@@ -718,17 +728,21 @@ def _read_ramses_new_1010(icpu, kwargs):
             f"selected={nselected}, range={ind.min(initial=-1)}..{ind.max(initial=-1)}, "
             f"capacity={kwargs['nselected']}")
 
-    pos_tmp_101 = H.maccess('pos_tmp_101')
+    pos_10 = H.maccess('pos_10')
     for idim0 in range(H.ndim):
         # put all positions between -0.5 and 0.5
-        pos_tmp_101[ind,idim0] = tmpp[mask,idim0]-0.5
+        pos_10[ind,idim0] = tmpp[mask,idim0]-0.5
         # convert code units to km/s
-        mem['vel_tmp_101'][ind,idim0] = tmpv[mask,idim0]*scale_l/scale_t*1e-5
-    mem['mass_tmp_101'][ind] = tmpm[mask]
+        mem['vel_10'][ind,idim0] = tmpv[mask,idim0]*scale_l/scale_t*1e-5
+    mem['mass_10'][ind] = tmpm[mask]
     if family != 'all':
         H.maccess('source_pid_10')[ind] = source_ids[mask]
 
-    if family in {'all', 'star'} and nstar_selected:
+    if (
+        kwargs['stellar_payload']
+        and family in {'all', 'star'}
+        and nstar_selected
+    ):
         star_slots = source_ids[starmask] - 1
         age_10 = H.maccess('age_10')
         metal_10 = H.maccess('metal_10')
@@ -764,7 +778,7 @@ def read_ramses_new_101(repository, rver='Ra3'):
         if rver == 'Ra4' else {"m0_skip": None, "chem_indices": {}, "nchem": 0}
     )
     m0_skip = stellar_descriptor["m0_skip"]
-    H.nchem = stellar_descriptor["nchem"]
+    H.nchem = stellar_descriptor["nchem"] if H.stellar_payload else 0
 
     # read cosmological params in header of amr file
     ipos    = repository.find("output_")
@@ -844,7 +858,7 @@ def read_ramses_new_101(repository, rver='Ra3'):
         'repository':repository, 'rver':rver, 'nchar':nchar,
         'ndim':H.ndim, 'scale_l':scale_l, 'scale_t':scale_t,
         'snapshot_age':snapshot_age, 'count_only':True,
-        'family':H.family,
+        'family':H.family, 'stellar_payload':H.stellar_payload,
         'm0_skip':m0_skip, 'stellar_descriptor':stellar_descriptor}
     iterobj = range(1,H.ncpu+1)
     if(H.nbPes==1): # Sequential reading
@@ -899,15 +913,17 @@ def read_ramses_new_101(repository, rver='Ra3'):
         raise RuntimeError(f"No particles selected for family={H.family}")
 
     if(H.verbose): print(f"\t|> Reading positions, velocities and masses...")
-    H.allocate('pos_tmp_101', (H.nusedpart, H.ndim), dtype=np.float64)
-    H.allocate('vel_tmp_101', (H.nusedpart, H.ndim), dtype=np.float64)
-    H.allocate('mass_tmp_101', (H.nusedpart,), dtype=np.float64)
+    # The count pass fixes the dense selected-particle layout, so workers can
+    # fill the persistent arrays directly without a second full-size copy.
+    H.allocate('pos_10', (H.npart, H.ndim), dtype=np.float64)
+    H.allocate('vel_10', (H.npart, H.ndim), dtype=np.float64)
+    H.allocate('mass_10', (H.npart,), dtype=np.float64)
     if H.family != 'all':
         H.allocate('source_pid_10', (H.nusedpart,), dtype=np.int64)
         mem['source_pid_10'][:] = -1
     H.massalloc = True
 
-    if H.nstar > 0:
+    if H.stellar_payload and H.nstar > 0:
         H.allocate('age_10', (H.nstar,), dtype=np.float64)
         H.allocate('metal_10', (H.nstar,), dtype=np.float64)
         mem['age_10'][:] = np.nan
@@ -966,7 +982,7 @@ def read_ramses_new_101(repository, rver='Ra3'):
                 f"Non-dense source PIDs for family={H.family}; explicit map required")
     if(H.verbose): print(f"\t|> Reading parts done", flush=True)
     if(H.verbose): print(f"\t|> Found {H.npart} selected particles after masking")
-    if H.nstar > 0:
+    if H.stellar_payload and H.nstar > 0:
         n_age = np.sum(np.isfinite(mem['age_10']))
         n_metal = np.sum(np.isfinite(mem['metal_10']))
         n_m0 = (
@@ -990,7 +1006,7 @@ def read_ramses_new_101(repository, rver='Ra3'):
                 f"Incomplete stellar properties: age={n_age}, metal={n_metal}, "
                 f"m0={n_m0}, chem={n_chem}, "
                 f"expected={H.nstar}")
-    if(H.verbose and H.nstar > 0):
+    if(H.verbose and H.stellar_payload and H.nstar > 0):
         print(f"\t|> Stellar age range (Gyr)          = "
               f"{np.min(mem['age_10']):.6g} .. {np.max(mem['age_10']):.6g}")
         print(f"\t|> Stellar metallicity range        = "
@@ -1004,15 +1020,8 @@ def read_ramses_new_101(repository, rver='Ra3'):
                   f"{','.join(CHEM_ELEMENTS)}")
             print(f"\t|> Stellar chemistry range           = "
                   f"{np.nanmin(chem_10):.6g} .. {np.nanmax(chem_10):.6g}")
-    H.allocate('pos_10', (H.npart, H.ndim), dtype=np.float64)
-    H.allocate('vel_10', (H.npart, H.ndim), dtype=np.float64)
-    H.allocate('mass_10', (H.npart,), dtype=np.float64)
     # H.allocate('id_10', (H.npart,), dtype=np.int32)
-    mem['pos_10'][:H.npart, :] = mem['pos_tmp_101'][:H.npart, :]
-    mem['vel_10'][:H.npart, :] = mem['vel_tmp_101'][:H.npart, :]
-    mem['mass_10'][:H.npart] = mem['mass_tmp_101'][:H.npart]
     # mem['id_10'][:] = np.arange(1,H.npart+1)
-    H.deallocate('pos_tmp_101','vel_tmp_101','mass_tmp_101')
 
     mtot = np.sum(mem['mass_10'])
     # that is for the dark matter so let's add baryons now if there are any 
@@ -1142,14 +1151,35 @@ def write_tree_brick_hdf():
         finput.attrs['dump_members']=dump_members
         finput.attrs['family']=H.family
         finput.attrs['photometry']=H.photometry
+        if H.mode == 'light':
+            finput.attrs['mode'] = 'light'
+            finput.attrs['stellar_age'] = False
+            finput.attrs['stellar_metallicity'] = False
+            finput.attrs['stellar_initial_mass'] = False
+            finput.attrs['stellar_chemistry'] = False
+            finput.attrs['extended_profiles'] = False
+            finput.attrs['light_schema'] = 'legacy_common_v1'
+            finput.attrs['light_fields'] = ','.join(H.LIGHT_CATALOG_FIELDS)
+            finput.attrs['unsupported_legacy_fields'] = ','.join(
+                H.LIGHT_UNSUPPORTED_LEGACY_FIELDS
+            )
         #---------------------------------
         # Catalog
         #---------------------------------
         box_physical_mpc = H.aexp * H.boxsize2
         cat = _convert_halo_catalog_units(H.liste_halos_o0[1:], box_physical_mpc)
+        if H.mode == 'light':
+            cat = _light_catalog(cat)
         grp = f44.create_group('catalog')
         halo_ds = grp.create_dataset('halo', shape=cat.shape, dtype=cat.dtype, data=cat, compression='lzf')
-        halo_ds.attrs['field_units'] = _json_attr(CATALOG_FIELD_UNITS)
+        field_units = CATALOG_FIELD_UNITS
+        if H.mode == 'light':
+            field_units = {
+                field: CATALOG_FIELD_UNITS[field]
+                for field in H.LIGHT_CATALOG_FIELDS
+            }
+            halo_ds.attrs['schema_profile'] = 'legacy_common_v1'
+        halo_ds.attrs['field_units'] = _json_attr(field_units)
         halo_ds.attrs['units_version'] = UNITS_VERSION
 
         if H.photometry:

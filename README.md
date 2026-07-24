@@ -123,10 +123,21 @@ the unified behaviour), `dm` (dark matter only, the classic HaloMaker halo
 finder), or `star` (stars only, the classic GalaxyMaker galaxy finder). The
 family is filtered at the read stage, so `dm`/`star` runs are faster and use
 less memory than `all` (e.g. `dm` skips loading stellar age/metal/chemistry).
-Absent-family properties become `0` (additive) or `NaN` (undefined); the output
-schema is unchanged across modes, `family` is recorded in the header, and the
-output filename is not changed by the mode (point separate modes at different
-run directories or prefixes to avoid overwrites).
+Absent-family properties become `0` (additive) or `NaN` (undefined); within the
+default `mode = full` profile the output schema is unchanged across family
+choices. `family` is recorded in the header, and the output filename is not
+changed by the selection (point separate runs at different directories or
+prefixes to avoid overwrites).
+
+`mode` selects the payload and output profile. `full` is the default and keeps
+the complete catalog. `light` runs the same current finder and core property
+algorithms but skips stellar age, metallicity, initial mass, per-element
+chemistry, SSP photometry, and value-added profiles at their read/compute
+boundaries. It writes a stable 33-field legacy-common catalog using current
+names and units. `light` has precedence over `photometry = .true.`: the run
+continues, prints a warning listing the disabled features, records
+`/input.mode = "light"` and effective flags, and omits `/photometry`. See
+`docs/CATALOG_FORMAT.md` for the exact reduced schema and legacy deltas.
 
 Recommended print levels:
 

@@ -333,6 +333,22 @@ halo_dtype = np.dtype([
         ('mcontam','f8')
 ])
 
+# Stable, family-independent output schema for mode=light. These are the
+# current-schema equivalents of the fields common to the canonical legacy
+# HaloMaker/GalaxyMaker catalogs (value-added extensions excluded).
+LIGHT_CATALOG_FIELDS = (
+    'nmem', 'id', 'timestep', 'level', 'hosthalo', 'hostsub', 'nbsub',
+    'nextsub', 'px', 'py', 'pz', 'vx', 'vy', 'vz', 'Lx', 'Ly', 'Lz',
+    'sha', 'shb', 'shc', 'm', 'r', 'spin', 'sigma', 'ek', 'ep', 'et',
+    'rvir', 'mvir', 'tvir', 'cvel', 'rho_0', 'r_c',
+)
+LIGHT_CATALOG_DTYPE = np.dtype([
+    (field, halo_dtype.fields[field][0]) for field in LIGHT_CATALOG_FIELDS
+])
+LIGHT_UNSUPPORTED_LEGACY_FIELDS = (
+    'sigma_bulge', 'm_bulge', 'rr[100]', 'rho[100]',
+)
+
 def clear_halo(h):
     h['id']=0
     h['timestep'] = 0
@@ -550,7 +566,10 @@ group:list['grp'] = []
 #======================================================================
 method = 'MSM' # flag to notify which and how the halofinder is to be used
 family = 'all' # particle family selection: all, dm, or star
+mode = 'full' # payload/output profile: full or legacy-comparable light
 photometry = True # compute and write SSP photometry (requires compact SSP tables)
+stellar_payload = True # effective age/metal/m0/chem read+compute policy
+extended_profiles = True # effective value-added profile computation policy
 optimize_nodes = False # TASK-28: opt-in incremental create_nodes path (default off = classic path)
 fsub = False # flag to notify whether subhaloes are included
 cdm = False # flag to select particle closest to the cdm instead of the one with the highest density
@@ -623,6 +642,7 @@ PARAMS = {
     'cdm':            (['cdm'],                                    fbool),
     'method':         (['method'],                                 str),
     'family':         (['family'],                                 str),
+    'mode':           (['mode'],                                   str),
     'photometry':     (['photometry'],                              fbool),
     'b_init':         (['b'],                                      np.float64),
     'nvoisins':       (['nvoisins'],                               np.int32),

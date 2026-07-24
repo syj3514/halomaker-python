@@ -103,6 +103,7 @@ cd "$BUILD_DIR"
 wrapper_objects=()
 shopt -s nullglob
 for wrapper in "$MODULE"-f2pywrappers.f "$MODULE"-f2pywrappers2.f90; do
+    [[ -f "$wrapper" ]] || continue
     object="${wrapper%.*}.o"
     wrapper_flags=(-c -fPIC -O3 -qopenmp "${visibility_flags[@]}" -I"$BUILD_DIR")
     if [[ "$wrapper" == *.f90 ]]; then

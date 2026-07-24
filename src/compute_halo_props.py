@@ -66,6 +66,31 @@ def initgsoft_00():
     return None
 
 #*************************************************************************
+def configure_payload_profile():
+    """Validate mode and apply its effective feature precedence."""
+    H.mode = str(H.mode).strip().lower()
+    if H.mode not in {'full', 'light'}:
+        raise ValueError(f"mode must be one of full, light; got {H.mode!r}")
+
+    requested_photometry = H.photometry
+    H.stellar_payload = H.mode == 'full'
+    H.extended_profiles = H.mode == 'full'
+    if H.mode != 'light':
+        return ()
+
+    H.photometry = False
+    disabled = [
+        'stellar age', 'stellar metallicity', 'stellar initial mass',
+        'stellar chemistry', 'stellar derived properties',
+        'extended density/kinematic profiles',
+    ]
+    if requested_photometry:
+        disabled.insert(0, 'photometry (requested=true)')
+    print('WARNING: mode=light force-disables: ' + ', '.join(disabled))
+    return tuple(disabled)
+
+
+#*************************************************************************
 def init_cosmo_01():
     '''
     This routine reads in the `input_HaloMaker.dat` file which contains the cosmological 
@@ -165,7 +190,9 @@ def init_cosmo_01():
     if H.family not in {'all', 'dm', 'star'}:
         raise ValueError(
             f"family must be one of all, dm, star; got {H.family!r}")
+    configure_payload_profile()
     print(f'[postprocess] H.family = {H.family}')
+    print(f'[postprocess] H.mode = {H.mode}')
     print(f'[postprocess] H.photometry = {H.photometry}')
 
 
@@ -254,10 +281,12 @@ def _compute_halo_props(ih1, member, fagor, printdatacheckhalo):
     r_halos_1a(h, member=member)
     det_vir_1b(h, fagor=fagor, member=member)
     compute_spin_parameter_1c(h)
-    compute_stellar_1d(h, member=member)
+    if H.stellar_payload:
+        compute_stellar_1d(h, member=member)
     if H.photometry:
         compute_ssp_photometry_1f(ih1, h, member=member)
-    compute_extended_profiles_1e(h, member=member)
+    if H.extended_profiles:
+        compute_extended_profiles_1e(h, member=member)
 
     if(printdatacheckhalo): print('> mass:', h['m'], 'mhalo:', h['mdm'], 'mstar:', h['m*'])
     if(printdatacheckhalo): print('> center:', h['px'],h['py'],h['pz'])
@@ -387,30 +416,33 @@ def new_step_1():
     density_1312 = mem['density_1312']
     level_1319 = mem['level_1319']
 
-    n_halo_contam = 0 
-    n_subs_contam = 0  
-    for i0 in range(H.nb_of_halos+H.nb_of_subhalos):
-        idx = whereIam_idxs[i0+1]
-        count = whereIam_counts[i0+1]
-        indexps = pids0_groupsorted[idx:idx+count]
-        mymass = mass_10[indexps]
+    if H.mode == 'full':
+        n_halo_contam = 0
+        n_subs_contam = 0
+        for i0 in range(H.nb_of_halos+H.nb_of_subhalos):
+            idx = whereIam_idxs[i0+1]
+            count = whereIam_counts[i0+1]
+            indexps = pids0_groupsorted[idx:idx+count]
+            mymass = mass_10[indexps]
 
-        iscontam = (mymass > H.massp*1.00001).any()
-        if(iscontam):
-            if(H.fsub):
-                if(level_1319[i0] == 1): 
-                    n_halo_contam += 1
+            iscontam = (mymass > H.massp*1.00001).any()
+            if(iscontam):
+                if(H.fsub):
+                    if(level_1319[i0] == 1):
+                        n_halo_contam += 1
+                    else:
+                        n_subs_contam += 1
                 else:
-                    n_subs_contam += 1
-            else:
-                n_halo_contam += 1
-    print('> # of halos, # of CONTAMINATED halos :',H.nb_of_halos,n_halo_contam,H.nb_of_subhalos,n_subs_contam)
-    if(H.megaverbose):
-        f222 = open(f'ncontam_halos{H.prefix}.dat', 'a+')
-        f222.write(f'{H.numero_step:6d} {H.nb_of_halos:6d} {n_halo_contam:6d} {H.nb_of_subhalos:6d} {n_subs_contam:6d}\n')
-        f222.close()
-        full_path = os.path.abspath(f'ncontam_halos{H.prefix}.dat')
-        os.chmod(full_path, H.fchmod); os.chown(full_path, H.uid, H.gid)
+                    n_halo_contam += 1
+        print('> # of halos, # of CONTAMINATED halos :',H.nb_of_halos,n_halo_contam,H.nb_of_subhalos,n_subs_contam)
+        if(H.megaverbose):
+            f222 = open(f'ncontam_halos{H.prefix}.dat', 'a+')
+            f222.write(f'{H.numero_step:6d} {H.nb_of_halos:6d} {n_halo_contam:6d} {H.nb_of_subhalos:6d} {n_subs_contam:6d}\n')
+            f222.close()
+            full_path = os.path.abspath(f'ncontam_halos{H.prefix}.dat')
+            os.chmod(full_path, H.fchmod); os.chown(full_path, H.uid, H.gid)
+    elif H.verbose:
+        print('> Contamination diagnostic skipped (mode=light)')
 
     if(H.verbose): print(f"\n$$ Make linked list done ({time.time()-_ref:.2f} sec)", flush=True)
     timereport.append(('- make_linked_list', time.time()-_ref))
@@ -730,6 +762,10 @@ def det_mass_17(h:np.void, member:tuple):
     indexps = member[1]
 
     mtot = np.sum(imass)
+    h['m'] = mtot  # in 10^11 M_sun
+    if H.mode == 'light':
+        return
+
     dmmask = indexps < H.ndm
     idm = imass[dmmask]
     masshalo = np.sum(idm)
@@ -739,7 +775,6 @@ def det_mass_17(h:np.void, member:tuple):
 
     h['ndm'] = len(idm)
     h['nstar'] = len(istar)
-    h['m'] = mtot  # in 10^11 M_sun
     h['mdm'] = masshalo  # in 10^11 M_sun
     h['m*'] = massgal  # in 10^11 M_sun
     h['mcontam'] = mcontam
@@ -767,7 +802,7 @@ def compute_ang_mom_19(h:np.void, member:tuple):
     h['Lx'] = np.sum(lxs)
     h['Ly'] = np.sum(lys)
     h['Lz'] = np.sum(lzs)
-    if((~dmmask).any() and np.isfinite(h['px*'])):
+    if H.stellar_payload and (~dmmask).any() and np.isfinite(h['px*']):
         spos = ipos[~dmmask]
         svel = ivel[~dmmask]
         smass = imass[~dmmask]
@@ -806,7 +841,7 @@ def r_halos_1a(h:np.void, member:tuple):
 
     h['r'] = np.sqrt(dr2max)
     starmask = indexps >= H.ndm
-    if(starmask.any() and np.isfinite(h['px*'])):
+    if H.stellar_payload and starmask.any() and np.isfinite(h['px*']):
         spos = ipos[starmask]
         drxs = correct_for_periodicity_1d(spos[:,0] - h['px*'])
         drys = correct_for_periodicity_1d(spos[:,1] - h['py*'])
@@ -872,7 +907,6 @@ def det_center_18(h:np.void, member:tuple):
     icenter = -1
     pos_10 = mem['pos_10']
     indexps = member[1]
-    dmmask = indexps < H.ndm
     ipos = member[2] # shape (N, 3)
     ivel = member[3] # shape (N, 3)
     imass = member[4]
@@ -926,8 +960,10 @@ def det_center_18(h:np.void, member:tuple):
     dv2 = imass * ((ivel[:,0] - h['vx'])**2 + (ivel[:,1] - h['vy'])**2 + (ivel[:,2] - h['vz'])**2)
     sigma2 = np.sum(dv2)
     h['sigma'] = np.sqrt(sigma2 / hm)
-    h['sigma_dm'] = np.sqrt(np.sum(dv2[dmmask]) / h['mdm']) if(h['mdm']>0) else 0
-    h['sigma*'] = np.sqrt(np.sum(dv2[~dmmask]) / h['m*']) if(h['m*']>0) else 0
+    if H.mode == 'full':
+        dmmask = indexps < H.ndm
+        h['sigma_dm'] = np.sqrt(np.sum(dv2[dmmask]) / h['mdm']) if(h['mdm']>0) else 0
+        h['sigma*'] = np.sqrt(np.sum(dv2[~dmmask]) / h['m*']) if(h['m*']>0) else 0
 
 #***********************************************************************
 def tab_props_inside_1b40(h:np.void,nr:int,v, member=None):
@@ -1528,10 +1564,13 @@ def refine_centers_1b(h:np.void, member=None):
             if(H.SC):
                 det_halo_center_sphere_1b1(h,h['px'],h['py'],h['pz'],r0, member=member)
 
-    starmask = indexps >= H.ndm
     h['px*'] = np.float64(np.nan)
     h['py*'] = np.float64(np.nan)
     h['pz*'] = np.float64(np.nan)
+    if not H.stellar_payload:
+        return
+
+    starmask = indexps >= H.ndm
     if(not starmask.any()):
         return
 

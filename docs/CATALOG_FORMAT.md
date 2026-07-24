@@ -102,7 +102,33 @@ Notes:
 | `ep` / `et` semantics (TASK-21) | For halos below the direct-sum threshold (default 1000 members) `ep` is the exact pairwise potential energy (with minimum-image periodicity). For larger halos `ep` is the outer value of the shell-integral `W(<r)` profile (median ~4% of direct-sum truth); before TASK-21 it was a closed-form constant-shape approximation (median ~76% off). `et = ek + ep` always. |
 | virial scan (TASK-21) | `rvir`/`mvir` come from scanning `\|2K+W\|/\|K+W\| <= 0.2` on the shell-integral `W(<r)` with exact discrete shell self-pair counting (one-particle shells carry no self term); comparison flags `virial_pe_profile` / `virial_pe_norm_policy` / `virial_shell_self_mode` on `halo_defs` can restore the legacy profile for A/B runs |
 
-### 3.3 `/photometry/{CB07,BC03,FSPS}`
+### 3.3 Light profile
+
+`mode = light` uses the current finder and current units but omits optional
+stellar payload and value-added calculations. Its family-independent
+`/catalog/halo` compound dtype contains exactly these 33 fields:
+
+| Category | Fields |
+|---|---|
+| Identity and hierarchy | `nmem`, `id`, `timestep`, `level`, `hosthalo`, `hostsub`, `nbsub`, `nextsub` |
+| Position and velocity | `px`, `py`, `pz`, `vx`, `vy`, `vz` |
+| Angular momentum and shape | `Lx`, `Ly`, `Lz`, `sha`, `shb`, `shc` |
+| Core scalar properties | `m`, `r`, `spin`, `sigma`, `ek`, `ep`, `et` |
+| Virial/profile core | `rvir`, `mvir`, `tvir`, `cvel`, `rho_0`, `r_c` |
+
+Legacy per-row `aexp` is represented by current `/header` metadata and member
+IDs remain in `/member`. Old GalaxyMaker's `sigma_bulge`, `m_bulge`, and raw
+100-bin `rr/rho` profile have no same-definition current implementation and are
+not recreated. The modified legacy writer's `cNFW`/`mcontam` and all current
+NFW, inner-slope, stellar-population, stellar-kinematics, SFR, and photometry
+extensions are outside the light schema.
+
+Light catalogs record `/input.mode = "light"`, effective feature booleans,
+the ordered `light_fields`, and `unsupported_legacy_fields`. `mode = light`
+forces photometry off with a warning and the `/photometry` group is absent.
+The default `full` profile retains the layout documented above.
+
+### 3.4 `/photometry/{CB07,BC03,FSPS}`
 
 | Field group | Fields | Unit / convention | Notes |
 |---|---|---|---|
